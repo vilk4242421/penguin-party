@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b3d6b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Пингвины-сумо</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--ice:#e8f8ff;--ice2:#bfe6fa;--deep:#0b3d6b;--sea:#1a7bb8;--accent:#ff9f1c;--good:#37d67a;--bad:#ff5d5d;
+  --font:"Trebuchet MS","Arial Rounded MT Bold","Segoe UI",system-ui,sans-serif;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+html,body{margin:0;height:100%;overflow:hidden;background:#0b3d6b;font-family:var(--font);color:#fff;overscroll-behavior:none;touch-action:none}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.hide{display:none!important}
+button{font-family:inherit;cursor:pointer;border:0;color:inherit}
+input{font-family:inherit;-webkit-user-select:text;user-select:text}
+
+/* ---------- меню ---------- */
+#menu{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:max(12px,env(safe-area-inset-top)) 16px max(12px,env(safe-area-inset-bottom));
+  background:radial-gradient(ellipse at 50% 30%,rgba(11,61,107,.35),rgba(5,25,50,.82));overflow-y:auto}
+.card{width:min(430px,100%);margin:auto;text-align:center;padding:18px 18px 16px;border-radius:26px;
+  background:linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,.08));border:2px solid rgba(255,255,255,.35);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 12px 40px rgba(0,20,50,.5)}
+h1{margin:0;font-size:clamp(28px,7vw,40px);letter-spacing:.5px;text-shadow:0 3px 0 #0a2f55,0 0 18px rgba(120,210,255,.6)}
+.tag{margin:2px 0 12px;opacity:.9;font-size:15px}
+.pengpreview{display:block;margin:0 auto 6px;width:96px;height:96px}
+.row{display:flex;gap:8px;justify-content:center;align-items:center;margin:8px 0;flex-wrap:wrap}
+#name{width:100%;padding:12px 14px;border-radius:14px;border:2px solid rgba(255,255,255,.5);background:rgba(255,255,255,.92);color:#0a2f55;font-size:18px;font-weight:700;text-align:center;outline:none}
+#name:focus{border-color:var(--accent)}
+.sw{width:30px;height:30px;border-radius:50%;border:3px solid rgba(255,255,255,.55);padding:0}
+.sw.sel{border-color:#fff;transform:scale(1.18);box-shadow:0 0 0 3px rgba(255,255,255,.35)}
+.hatb{width:38px;height:34px;border-radius:12px;background:rgba(255,255,255,.18);font-size:19px;padding:0;border:2px solid transparent}
+.hatb.sel{border-color:#fff;background:rgba(255,255,255,.38)}
+.btn{display:block;width:100%;padding:14px 16px;margin:8px 0;font-size:20px;font-weight:800;border-radius:16px;color:#fff;
+  box-shadow:0 5px 0 rgba(0,0,0,.28),0 8px 16px rgba(0,0,0,.25);transition:transform .08s,box-shadow .08s}
+.btn:active{transform:translateY(4px);box-shadow:0 1px 0 rgba(0,0,0,.28)}
+.btn.main{background:linear-gradient(180deg,#ffb23d,#ff8a00);font-size:23px}
+.btn.alt{background:linear-gradient(180deg,#46b6ff,#1f7fd6)}
+.btn.sub{background:linear-gradient(180deg,#7d93b0,#566b88);font-size:17px}
+.btn small{display:block;font-size:12px;font-weight:600;opacity:.9;margin-top:1px}
+.mini{padding:8px 12px;border-radius:12px;background:rgba(255,255,255,.2);font-size:15px;font-weight:700}
+#online{font-size:13px;opacity:.9;min-height:18px;margin-top:4px}
+#howto{font-size:13px;line-height:1.35;opacity:.92;margin-top:8px}
+#friends{background:rgba(0,0,0,.2);border-radius:16px;padding:10px;margin:6px 0}
+#code{width:120px;padding:10px;border-radius:12px;border:2px solid rgba(255,255,255,.5);background:#fff;color:#0a2f55;font-size:22px;font-weight:800;text-align:center;text-transform:uppercase;letter-spacing:4px;outline:none}
+#msg{min-height:20px;font-size:14px;color:#ffd27a;margin-top:4px}
+
+/* ---------- HUD ---------- */
+#hud{position:fixed;inset:0;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+#hud>*{pointer-events:none}
+#hud button{pointer-events:auto}
+#score{position:absolute;left:10px;top:10px;min-width:130px;font-size:14px;font-weight:700;text-shadow:0 2px 3px rgba(0,0,0,.6)}
+#score div{display:flex;align-items:center;gap:6px;padding:2px 8px;margin-bottom:2px;border-radius:10px;background:rgba(5,30,60,.45);white-space:nowrap}
+#score i{width:11px;height:11px;border-radius:50%;display:inline-block;border:2px solid #fff}
+#score b{margin-left:auto;padding-left:8px}
+#score .me{background:rgba(255,159,28,.55)}
+#score .dead{opacity:.5;text-decoration:line-through}
+#top{position:absolute;top:8px;left:50%;transform:translateX(-50%);text-align:center;font-size:14px;font-weight:700;text-shadow:0 2px 3px rgba(0,0,0,.7);line-height:1.25}
+#top .big{font-size:18px}
+#roomcode{pointer-events:auto!important;display:inline-block;margin-top:2px;padding:2px 10px;border-radius:10px;background:rgba(0,0,0,.35);letter-spacing:3px;font-size:15px}
+#tr{position:absolute;right:10px;top:10px;display:flex;gap:6px}
+#tr button{width:42px;height:42px;border-radius:14px;background:rgba(5,30,60,.55);font-size:20px;padding:0}
+#banner{position:absolute;left:0;right:0;top:36%;text-align:center;font-weight:900;font-size:clamp(44px,min(15vw,15vh),96px);text-shadow:0 4px 0 #0a2f55,0 0 24px rgba(0,0,0,.4);line-height:1.05;padding:0 10px}
+#banner small{display:block;font-size:.36em;margin-top:6px;opacity:.95}
+#dash{position:absolute;right:max(18px,env(safe-area-inset-right));bottom:max(22px,env(safe-area-inset-bottom));width:104px;height:104px;border-radius:50%;
+  background:conic-gradient(rgba(255,255,255,.55) var(--p,0%),#ff8a00 0);border:4px solid rgba(255,255,255,.9);
+  font-size:15px;font-weight:900;box-shadow:0 6px 18px rgba(0,0,0,.4);padding:0;touch-action:none}
+#dash span{position:absolute;inset:7px;border-radius:50%;background:linear-gradient(180deg,#ffb23d,#ff7a00);display:flex;align-items:center;justify-content:center;flex-direction:column;line-height:1}
+#dash span b{font-size:28px}
+#dash.cd span{filter:grayscale(.6) brightness(.8)}
+#emo{position:absolute;right:max(132px,calc(env(safe-area-inset-right) + 132px));bottom:max(30px,env(safe-area-inset-bottom));display:flex;gap:6px;align-items:center}
+#emo button{width:44px;height:44px;border-radius:50%;background:rgba(5,30,60,.55);font-size:22px;padding:0}
+#emobtns{display:flex;gap:6px}
+#hint{position:absolute;left:0;right:0;bottom:6px;text-align:center;font-size:12px;opacity:.7;text-shadow:0 1px 2px #000}
+#final{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(340px,88vw);padding:14px 16px;border-radius:22px;background:linear-gradient(180deg,rgba(11,61,107,.92),rgba(5,25,50,.95));border:2px solid rgba(255,255,255,.4);box-shadow:0 10px 40px rgba(0,0,0,.5);text-align:center}
+#final h2{margin:0 0 8px;font-size:24px;text-shadow:0 2px 0 #0a2f55}
+#final div{display:flex;align-items:center;gap:8px;padding:5px 8px;margin:3px 0;border-radius:12px;background:rgba(255,255,255,.1);font-weight:700;font-size:16px}
+#final div.me{background:rgba(255,159,28,.55)}
+#final span{width:26px;font-size:20px}
+#final i{width:12px;height:12px;border-radius:50%;border:2px solid #fff}
+#final em{font-style:normal;flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#final p{margin:8px 0 0;font-size:13px;opacity:.85}
+#banner.subonly{top:auto;bottom:max(24px,env(safe-area-inset-bottom));font-size:18px;text-shadow:0 2px 4px #000}
+#banner.subonly small{font-size:1em;margin:0}
+@media (max-width:620px){#score{top:60px}#banner.subonly{bottom:max(150px,env(safe-area-inset-bottom))}}
+@media (max-height:480px){#score{font-size:12px;min-width:110px}#dash{width:88px;height:88px}#banner{top:30%}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="menu">
+  <div class="card">
+    <svg class="pengpreview" id="prev" viewBox="-40 -40 80 80"></svg>
+    <h1 data-t="title">Пингвины-сумо</h1>
+    <p class="tag" data-t="tag">Столкни всех со льдины!</p>
+    <input id="name" maxlength="14" autocomplete="off" data-ph="yourName" placeholder="Твоё имя">
+    <div class="row" id="colors"></div>
+    <div class="row" id="hats"></div>
+    <button class="btn main" id="bOnline"><span data-t="online">Играть онлайн</span><small data-t="onlineSub">Быстрый матч с живыми игроками</small></button>
+    <button class="btn alt" id="bFriends" data-t="friends">С друзьями (по коду)</button>
+    <div id="friends" class="hide">
+      <div class="row"><button class="btn sub" id="bCreate" style="margin:0;width:auto;flex:1" data-t="create">Создать комнату</button></div>
+      <div class="row"><input id="code" maxlength="4" placeholder="ABCD" autocomplete="off"><button class="btn alt" id="bJoin" style="margin:0;width:auto;font-size:18px" data-t="join">Войти</button></div>
+    </div>
+    <button class="btn sub" id="bOffline"><span data-t="offline">Против ботов</span><small data-t="offlineSub">Без интернета</small></button>
+    <div id="msg"></div>
+    <div class="row"><button class="mini" id="bSound">🔊</button><button class="mini" id="bLang">RU</button><button class="mini hide" id="bInstall" data-t="install">📲 Установить</button></div>
+    <div id="online"></div>
+    <div id="howto" data-t="howto"></div>
+  </div>
+</div>
+
+<div id="hud" class="hide">
+  <div id="score"></div>
+  <div id="top"><div class="big" id="alive"></div><div id="roomline"></div></div>
+  <div id="tr"><button id="bS2">🔊</button><button id="bExit">✖</button></div>
+  <div id="banner"></div>
+  <div id="final" class="hide"></div>
+  <div id="emo"><div id="emobtns" class="hide"><button data-e="0">😂</button><button data-e="1">😡</button><button data-e="2">👍</button><button data-e="3">🐟</button></div><button id="bEmo">💬</button></div>
+  <button id="dash"><span><b>⚡</b><em style="font-style:normal" data-t="dash">РЫВОК</em></span></button>
+  <div id="hint" data-t="hint"></div>
+</div>
+
+<script src="config.js"></script>
+<script src="/sdk.js" onerror="void 0"></script>
+<script src="sim.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
