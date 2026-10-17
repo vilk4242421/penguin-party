@@ -19,6 +19,16 @@ const MIME = {
   '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon',
 };
 
+// «версия сборки» = хэш всех файлов игры; подставляется в sw.js, чтобы клиенты обновлялись сами после каждого деплоя
+const crypto = require('crypto');
+function computeBuild() {
+  const h = crypto.createHash('sha1');
+  const walk = (d) => fs.readdirSync(d).sort().forEach((f) => { const fp = path.join(d, f); if (fs.statSync(fp).isDirectory()) walk(fp); else { h.update(f); h.update(fs.readFileSync(fp)); } });
+  try { walk(GAME_DIR); } catch (e) {}
+  return h.digest('hex').slice(0, 10);
+}
+const BUILD = computeBuild();
+
 const rooms = new Map(); // code -> room
 let connCount = 0;
 const ipCount = new Map();
@@ -29,13 +39,14 @@ const server = http.createServer((req, res) => {
     let players = 0;
     for (const r of rooms.values()) players += r.clients.size;
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
-    return res.end(JSON.stringify({ players, rooms: rooms.size }));
+    return res.end(JSON.stringify({ players, rooms: rooms.size, proto: Sim.C.PROTO, version: Sim.C.VERSION, build: BUILD }));
   }
   if (url === '/health') { res.writeHead(200); return res.end('ok'); }
   let file = path.normalize(path.join(GAME_DIR, url === '/' ? 'index.html' : url));
   if (!file.startsWith(GAME_DIR)) { res.writeHead(403); return res.end(); }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); return res.end('Not found'); }
+    if (path.basename(file) === 'sw.js') data = Buffer.from(String(data).replace("const BUILD = 'dev';", "const BUILD = '" + BUILD + "';"));
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     res.end(data);
   });
@@ -53,18 +64,22 @@ function makeCode() {
 }
 
 function createRoom(pub) {
-  const room = { code: makeCode(), pub, game: new Sim.Game(), clients: new Set() };
+  const room = { code: makeCode(), pub, game: new Sim.Game({ lobby: true, pub }), clients: new Set() };
   rooms.set(room.code, room);
   return room;
 }
 
 function findPublicRoom() {
-  let best = null;
+  // лучше всего — комната в ожидании; иначе матч, который только начался
+  let best = null, bs = -1;
   for (const r of rooms.values()) {
     if (!r.pub) continue;
-    const n = r.game.humans().length;
+    const g = r.game, n = g.humans().length;
     if (n >= Sim.C.MAX) continue;
-    if (!best || n > best.game.humans().length) best = r;
+    let sc = -1;
+    if (g.phase === 'lobby') sc = 100 + n;
+    else if (g.round <= 1 && g.phase !== 'final') sc = 50 + n;
+    if (sc > bs) { bs = sc; best = r; }
   }
   return best || createRoom(true);
 }
@@ -102,6 +117,7 @@ wss.on('connection', (ws, req) => {
     if (!m || typeof m !== 'object') return;
 
     if (m.t === 'join' && !ws.room) {
+      if ((m.v | 0) !== Sim.C.PROTO) return send(ws, { t: 'err', e: 'old' });
       let room = null;
       if (m.mode === 'create') room = createRoom(false);
       else if (m.mode === 'code') {
@@ -111,23 +127,29 @@ wss.on('connection', (ws, req) => {
       } else room = findPublicRoom();
 
       const g = room.game;
-      // человек вытесняет бота в свободном месте
       if (g.players.length >= Sim.C.MAX) {
         const bot = g.players.find(p => p.bot);
         if (bot) g.removePlayer(bot.id);
       }
-      const p = g.addPlayer(cleanName(m.name), m.color, m.hat, false);
+      const p = g.addPlayer(cleanName(m.name), m.look, false);
       ws.room = room; ws.pid = p.id; room.clients.add(ws);
-      send(ws, { t: 'joined', id: p.id, code: room.code, pub: room.pub });
-      const r = g.takeRoster(); if (r) broadcast(room, { t: 'r', list: r });
+      send(ws, { t: 'joined', id: p.id, code: room.code, pub: room.pub ? 1 : 0 });
+      const r = g.takeRoster(); if (r) { r.t = 'r'; broadcast(room, r); }
       return;
     }
     if (!ws.room) return;
     const g = ws.room.game;
     if (m.t === 'in') g.setInput(ws.pid, m.x, m.y, m.d ? 1 : 0);
     else if (m.t === 'em') {
-      const e = m.e | 0; if (e >= 0 && e < 4) broadcast(ws.room, { t: 'em', id: ws.pid, e });
+      const e = m.e | 0; if (e >= 0 && e < Sim.C.N_EMO) broadcast(ws.room, { t: 'em', id: ws.pid, e });
     } else if (m.t === 'ping') send(ws, { t: 'pong', ts: m.ts });
+    else if (m.t === 'cfg') g.setCfg(ws.pid, m);
+    else if (m.t === 'start') {
+      if (ws.pid === g.hostId) { if (!g.startMatch()) send(ws, { t: 'info', e: 'need2' }); }
+    } else if (m.t === 'look') { // смена внешнего вида в ожидании
+      const p = g.players.find(q => q.id === ws.pid);
+      if (p && g.phase === 'lobby') { p.look = Sim.cleanLook(m.look); g.rosterDirty = true; }
+    }
   });
 
   ws.on('close', () => {
@@ -138,7 +160,7 @@ wss.on('connection', (ws, req) => {
     room.clients.delete(ws);
     room.game.removePlayer(ws.pid);
     if (room.clients.size === 0) rooms.delete(room.code);
-    else { const r = room.game.takeRoster(); if (r) broadcast(room, { t: 'r', list: r }); }
+    else { const r = room.game.takeRoster(); if (r) { r.t = 'r'; broadcast(room, r); } }
   });
   ws.on('error', () => {});
 });
@@ -154,7 +176,7 @@ setInterval(() => {
       room.game.step(TICK);
       if (tick % SNAP_EVERY === 0) {
         const r = room.game.takeRoster();
-        if (r) broadcast(room, { t: 'r', list: r });
+        if (r) { r.t = 'r'; broadcast(room, r); }
         const s = room.game.snapshot(); s.t = 's';
         broadcast(room, JSON.stringify(s));
       }
@@ -171,4 +193,4 @@ setInterval(() => {
   }
 }, 10000);
 
-server.listen(PORT, () => console.log('Penguin Sumo server on :' + PORT));
+server.listen(PORT, () => console.log('Penguin Sumo server on :' + PORT + ' build ' + BUILD));
