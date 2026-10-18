@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Пингвины-сумо</title>
+<title>Пингвины</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -141,11 +141,83 @@ h2{margin:0 0 8px;font-size:24px;text-shadow:0 2px 0 #0a2f55}
 #lobby .st{font-size:13px;min-height:18px;opacity:.95;margin:2px 0 4px}
 #lobby .btn{margin:4px 0 0;padding:10px 14px;font-size:18px}
 @media (max-height:520px){#lobby{width:min(330px,56vw);left:10px;transform:none;top:8px}#lobby .pl{display:none}}
+body.fin #toasts{top:100px;left:8px;right:auto;align-items:flex-start;max-width:42vw}
 #toasts{position:fixed;left:0;right:0;top:max(60px,env(safe-area-inset-top));display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;z-index:50}
 .toast{padding:9px 16px;border-radius:14px;background:rgba(11,61,107,.95);border:2px solid #ffd23f;font-weight:800;font-size:15px;animation:ts 3.6s forwards;max-width:90vw;text-align:center}
 @keyframes ts{0%{opacity:0;transform:translateY(-12px)}8%{opacity:1;transform:none}88%{opacity:1}100%{opacity:0}}
 @media (max-width:620px){#score{top:80px}#top .big{font-size:15px;white-space:nowrap}#banner.subonly{bottom:max(150px,env(safe-area-inset-bottom))}#killfeed{top:112px}}
 @media (max-height:480px){#score{font-size:12px;min-width:110px}#dash{width:88px;height:88px}#banner{top:30%}}
+
+/* ---------- v3: режимы, турнир, кликер, подиум ---------- */
+.card.wide{width:min(520px,100%)}
+.chips{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:6px 0}
+.chip{padding:8px 14px;border-radius:13px;background:rgba(255,255,255,.2);font-weight:800;font-size:16px;border:2px solid transparent}
+.chip.on{background:linear-gradient(180deg,#ffb23d,#ff8a00);border-color:#fff}
+.chip.green.on{background:linear-gradient(180deg,#52e08a,#1fae5b)}
+.lbl{font-size:13px;font-weight:700;opacity:.9;margin:8px 0 2px;text-align:left}
+#modeGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:6px 0}
+.mcard{padding:8px 6px;border-radius:16px;background:rgba(255,255,255,.16);border:3px solid transparent;font-weight:800;font-size:14px;line-height:1.15}
+.mcard b{display:block;font-size:30px;margin-bottom:2px}
+.mcard.on{border-color:#ffd23f;background:rgba(255,210,63,.25)}
+#modeInfo{font-size:14px;line-height:1.3;min-height:38px;margin:4px 0;opacity:.95}
+.pts{display:flex;gap:6px;justify-content:center;margin:6px 0;flex-wrap:wrap}
+.pts span{padding:4px 9px;border-radius:10px;background:rgba(255,255,255,.16);font-size:13px;font-weight:800}
+.pts span:first-child{background:rgba(255,210,63,.35)}
+.note{font-size:12.5px;line-height:1.35;opacity:.9;margin:6px 0}
+.rowb{display:flex;gap:8px}.rowb .btn{flex:1;font-size:16px;padding:12px 8px}
+#wNote{font-size:13px;color:#ffe08a;font-weight:700;min-height:18px;margin:4px 0}
+.item .lk{display:block;font-size:10px;color:#ffe08a;font-weight:700;line-height:1.1;margin-top:1px}
+.codeRow{display:flex;gap:6px;margin:6px 0}
+.codeRow input{flex:1;min-width:0;padding:9px 10px;border-radius:12px;border:2px solid rgba(255,255,255,.5);background:#fff;color:#0a2f55;font-size:16px;font-weight:700;outline:none}
+.codeRow button{padding:9px 14px;border-radius:12px;background:linear-gradient(180deg,#46b6ff,#1f7fd6);font-weight:800;font-size:15px}
+/* кликер */
+#ckCv{display:block;margin:0 auto;width:min(300px,78vw);height:min(300px,78vw);touch-action:manipulation;cursor:pointer}
+#ckFish{font-size:30px;font-weight:900;color:#ffe08a;text-shadow:0 2px 0 #0a2f55}
+#ckInfo{font-size:14px;font-weight:700;opacity:.95;margin-bottom:2px}
+#ckStage{font-size:15px;font-weight:800}
+.pbar{height:14px;border-radius:8px;background:rgba(0,0,0,.35);overflow:hidden;margin:6px 0 2px}
+.pbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#52e08a,#ffd23f);border-radius:8px;transition:width .2s}
+.up{display:flex;align-items:center;justify-content:space-between;width:100%;margin:6px 0;padding:11px 14px;border-radius:15px;background:linear-gradient(180deg,#46b6ff,#1f7fd6);font-size:16px;font-weight:800;box-shadow:0 4px 0 rgba(0,0,0,.28);text-align:left}
+.up small{opacity:.9;font-weight:700;margin-left:8px;margin-right:auto}
+.up span{margin-left:auto;padding:3px 10px;border-radius:10px;background:rgba(0,0,0,.28);color:#ffe08a}
+.up.off{filter:grayscale(.7) brightness(.8)}
+.modal{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(0,10,30,.7);padding:16px}
+.modal .card{width:min(380px,100%)}
+/* HUD v3 */
+#modeTag{position:absolute;left:50%;top:44px;transform:translateX(-50%);padding:3px 12px;border-radius:12px;background:rgba(5,30,60,.55);font-size:13px;font-weight:800;white-space:nowrap}
+#timer{position:absolute;left:50%;top:70px;transform:translateX(-50%);font-size:30px;font-weight:900;text-shadow:0 3px 0 #0a2f55,0 0 10px rgba(0,0,0,.4)}
+#timer.low{color:#ff6b6b}
+#intro{position:absolute;left:50%;top:50%;transform:translate(-50%,-52%);width:min(380px,92vw);padding:16px;border-radius:24px;text-align:center;
+  background:linear-gradient(180deg,rgba(11,61,107,.94),rgba(5,25,50,.96));border:2px solid rgba(255,255,255,.45);box-shadow:0 10px 40px rgba(0,0,0,.5);animation:pop .35s}
+#intro .ic{font-size:64px;line-height:1}
+#intro h3{margin:4px 0 4px;font-size:27px;text-shadow:0 2px 0 #0a2f55}
+#intro p{margin:4px 0;font-size:15px;line-height:1.3}
+#intro .rd{font-size:13px;opacity:.85;font-weight:700}
+@keyframes pop{0%{transform:translate(-50%,-52%) scale(.7);opacity:0}100%{transform:translate(-50%,-52%) scale(1);opacity:1}}
+#over{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(360px,92vw);padding:12px 14px;border-radius:22px;
+  background:linear-gradient(180deg,rgba(11,61,107,.94),rgba(5,25,50,.96));border:2px solid rgba(255,255,255,.4);box-shadow:0 10px 40px rgba(0,0,0,.5);text-align:center}
+#over h2{font-size:20px;margin:0 0 6px}
+#over div.r{display:flex;align-items:center;gap:8px;padding:4px 8px;margin:3px 0;border-radius:11px;background:rgba(255,255,255,.1);font-weight:700;font-size:15px}
+#over div.r.me{background:rgba(255,159,28,.55)}
+#over .r span{width:24px;font-size:18px}
+#over .r i{width:12px;height:12px;border-radius:50%;border:2px solid #fff;flex:none}
+#over .r em{font-style:normal;flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#over .r u{text-decoration:none;color:#9be8b0;font-size:13px}
+#over p{margin:6px 0 0;font-size:13px;opacity:.9}
+#final{top:auto;bottom:max(10px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(380px,94vw);padding:10px 12px;pointer-events:auto}
+#final h2{font-size:19px;margin:0 0 4px}
+#final .earn{color:#ffe08a;font-weight:800;font-size:15px;margin:2px 0}
+#final .rowb{margin-top:6px}
+#final .rowb .btn{margin:0;padding:10px 6px;font-size:16px}
+#final p{margin:4px 0 0}
+#finalTop{position:absolute;left:0;right:0;top:max(10px,env(safe-area-inset-top));text-align:center;font-size:26px;font-weight:900;text-shadow:0 3px 0 #0a2f55,0 0 14px rgba(0,0,0,.4);pointer-events:none}
+#finalTop small{display:block;font-size:14px;opacity:.95;margin-top:2px}
+#dash span em{font-style:normal;font-size:13px}
+#cfgSheet .card{max-height:92vh;overflow-y:auto;touch-action:pan-y}
+#lobby .sum{font-size:13px;font-weight:700;margin:4px 0;opacity:.95}
+#lobby .opts button.cfgb{background:linear-gradient(180deg,#46b6ff,#1f7fd6)}
+@media (max-height:560px){#modeGrid{grid-template-columns:repeat(4,1fr)}.mcard b{font-size:22px}#ckCv{width:200px;height:200px}}
+@media (max-width:620px){#modeTag{top:44px}#timer{top:68px}}
 </style>
 </head>
 <body>
@@ -153,25 +225,76 @@ h2{margin:0 0 8px;font-size:24px;text-shadow:0 2px 0 #0a2f55}
 
 <div id="menu" class="screen">
   <div class="card">
-    <canvas id="prev" class="prev" width="240" height="240"></canvas>
-    <h1 data-t="title">Пингвины-сумо</h1>
-    <p class="tag" data-t="tag">Столкни всех со льдины!</p>
+    <canvas id="prev" class="prev" width="260" height="260" style="width:130px;height:130px"></canvas>
+    <h1 data-t="title">Пингвины</h1>
+    <p class="tag" data-t="tag">Турниры, гонки и сумо на льдинах!</p>
     <input id="name" maxlength="14" autocomplete="off" data-ph="yourName" placeholder="Твоё имя">
     <div class="lvlbar"><span id="lvlTxt"></span><div class="bar"><i id="lvlFill"></i></div><b id="coinsTxt"></b></div>
-    <button class="btn main" id="bOnline"><span data-t="online">Играть онлайн</span><small data-t="onlineSub">Быстрый матч с живыми игроками</small></button>
-    <button class="btn alt" id="bFriends" data-t="friends">С друзьями (по коду)</button>
+    <button class="btn main" id="bOnline"><span data-t="online">Играть онлайн</span><small data-t="onlineSub">Быстрый турнир с живыми игроками</small></button>
+    <div class="rowb">
+      <button class="btn alt" id="bTour">🏆 <span data-t="tournament">Турнир</span></button>
+      <button class="btn alt" id="bModes">🎮 <span data-t="modes">Режимы</span></button>
+    </div>
+    <button class="btn alt" id="bFriends" style="margin-top:0" data-t="friends">С друзьями (по коду)</button>
     <div id="friends" class="hide">
       <div class="row"><button class="btn sub" id="bCreate" style="margin:0;width:auto;flex:1" data-t="create">Создать комнату</button></div>
       <div class="row"><input id="code" maxlength="4" placeholder="ABCD" autocomplete="off"><button class="btn alt" id="bJoin" style="margin:0;width:auto;font-size:18px" data-t="join">Войти</button></div>
     </div>
-    <button class="btn sub" id="bOffline"><span data-t="offline">Против ботов</span><small data-t="offlineSub">Без интернета</small></button>
-    <div class="row"><button class="mini" id="bWard">👗 <span data-t="wardrobe">Гардероб</span></button><button class="mini" id="bAch">🏆 <span data-t="achievements">Награды</span></button><button class="mini" id="bSet">⚙️</button><button class="mini hide" id="bInstall" data-t="install">📲 Установить</button></div>
+    <button class="btn sub" id="bOffline"><span data-t="offline">Против ботов</span><small data-t="offlineSub">Без интернета — быстрый турнир</small></button>
+    <div class="row"><button class="mini" id="bClk">🐟 <span data-t="clicker">Симулятор</span></button><button class="mini" id="bWard">👗 <span data-t="wardrobe">Гардероб</span></button><button class="mini" id="bAch">🏆</button><button class="mini" id="bSet">⚙️</button><button class="mini hide" id="bInstall" data-t="install">📲 Установить</button></div>
     <div id="msg"></div>
     <div id="online"></div>
-    <div id="howto" data-t="howto"></div>
     <div id="ver"></div>
   </div>
 </div>
+
+<div id="tourney" class="screen hide">
+  <div class="card wide">
+    <h2>🏆 <span data-t="tournament">Турнир</span></h2>
+    <p class="note" data-t="tourNote">Несколько разных режимов подряд. За каждое место — очки, в конце — пьедестал. Последний окажется в клетке!</p>
+    <div class="lbl" data-t="tourLen">Сколько режимов:</div>
+    <div class="chips" id="tLen"></div>
+    <div class="lbl" data-t="tourBots">Недостающие игроки:</div>
+    <div class="chips"><button class="chip green" id="tBotsOn"></button><button class="chip green" id="tBotsOff"></button></div>
+    <div class="note" id="tInfo"></div>
+    <div class="pts" id="tPts"></div>
+    <button class="btn main" id="bTOff"><span data-t="vsBots">Против ботов</span><small data-t="offlineSub2">офлайн, сразу играем</small></button>
+    <button class="btn go" id="bTOn"><span data-t="onlineTour">Онлайн-турнир</span><small data-t="onlineTourSub">с живыми игроками</small></button>
+    <button class="btn alt" id="bTFr" data-t="withFriends">С друзьями (комната)</button>
+    <button class="btn sub" id="bTBack" data-t="back">Назад</button>
+  </div>
+</div>
+
+<div id="modes" class="screen hide">
+  <div class="card wide">
+    <h2>🎮 <span data-t="modes">Режимы</span></h2>
+    <div id="modeGrid"></div>
+    <div id="modeInfo"></div>
+    <div class="lbl" data-t="rounds">Раундов:</div>
+    <div class="chips" id="mLen"></div>
+    <div class="rowb"><button class="btn main" id="bMOff" data-t="vsBots">Против ботов</button><button class="btn go" id="bMOn" data-t="onlineShort">Онлайн</button></div>
+    <button class="btn alt" id="bMFr" style="margin-top:0" data-t="withFriends">С друзьями (комната)</button>
+    <button class="btn sub" id="bMBack" data-t="back">Назад</button>
+  </div>
+</div>
+
+<div id="clicker" class="screen hide">
+  <div class="card">
+    <h2 id="ckTitle">🐟</h2>
+    <div id="ckFish"></div>
+    <div id="ckInfo"></div>
+    <canvas id="ckCv"></canvas>
+    <div id="ckStage"></div>
+    <div class="pbar"><i id="ckBar"></i></div>
+    <div class="note" id="ckNext" style="margin:2px 0"></div>
+    <button class="up" id="ckUpP"></button>
+    <button class="up" id="ckUpA"></button>
+    <div class="note" id="ckGoal"></div>
+    <button class="btn sub" id="bCkBack" data-t="back">Назад</button>
+  </div>
+</div>
+<div id="ckDone" class="modal hide"><div class="card"><h2 id="ckDoneT"></h2><p id="ckDoneP" style="font-size:15px;line-height:1.35"></p>
+  <button class="btn go" id="bCkDoneW"></button><button class="btn sub" id="bCkDoneC"></button></div></div>
 
 <div id="wardrobe" class="screen hide">
   <div class="card">
@@ -180,6 +303,8 @@ h2{margin:0 0 8px;font-size:24px;text-shadow:0 2px 0 #0a2f55}
     <div id="coins"></div>
     <div id="tabs"></div>
     <div id="grid"></div>
+    <div id="wNote"></div>
+    <div class="codeRow"><input id="promo" maxlength="24" autocomplete="off" data-ph="promoPh" placeholder="Секретный код"><button id="bPromo" data-t="enter">Ввести</button></div>
     <button class="btn sub" id="bWBack" data-t="back">Назад</button>
   </div>
 </div>
@@ -205,17 +330,33 @@ h2{margin:0 0 8px;font-size:24px;text-shadow:0 2px 0 #0a2f55}
   </div>
 </div>
 
+<div id="cfgSheet" class="modal hide"><div class="card wide">
+  <h2>⚙️ <span data-t="roomSet">Настройки комнаты</span></h2>
+  <div class="lbl" data-t="format">Формат:</div>
+  <div class="chips"><button class="chip" id="cfK0"></button><button class="chip" id="cfK1"></button></div>
+  <div id="cfModeBox"><div class="lbl" data-t="pickMode">Режим:</div><div id="cfModes" class="chips"></div></div>
+  <div class="lbl" id="cfLenLbl"></div>
+  <div class="chips" id="cfLen"></div>
+  <div class="chips"><button class="chip green" id="cfBots"></button><button class="chip green" id="cfChaos"></button></div>
+  <button class="btn go" id="cfOk" data-t="ok">Готово</button>
+</div></div>
+
 <div id="hud" class="hide">
   <div id="score"></div>
   <div id="top"><div class="big" id="alive"></div><div id="roomline"></div></div>
+  <div id="modeTag"></div>
+  <div id="timer"></div>
   <div id="tr"><button id="bS2">🔊</button><button id="bExit">✖</button></div>
   <div id="killfeed"></div>
   <div id="windmsg"></div>
   <div id="banner"></div>
+  <div id="intro" class="hide"></div>
+  <div id="over" class="hide"></div>
+  <div id="finalTop" class="hide"></div>
   <div id="final" class="hide"></div>
   <div id="lobby" class="hide"></div>
   <div id="emo"><button id="bEmo">💬</button><div id="emobtns" class="hide"></div></div>
-  <button id="dash"><span><b>⚡</b><em style="font-style:normal" data-t="dash">РЫВОК</em></span></button>
+  <button id="dash"><span><b id="dashIc">⚡</b><em id="dashTx" data-t="dash">РЫВОК</em></span></button>
   <div id="hint"></div>
 </div>
 <div id="toasts"></div>
@@ -224,8 +365,10 @@ h2{margin:0 0 8px;font-size:24px;text-shadow:0 2px 0 #0a2f55}
 <script src="/sdk.js" onerror="void 0"></script>
 <script src="sim.js"></script>
 <script src="cosmetics.js"></script>
+<script src="scene.js"></script>
 <script src="profile.js"></script>
 <script src="audio.js"></script>
+<script src="clicker.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

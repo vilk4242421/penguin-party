@@ -63,17 +63,21 @@ function makeCode() {
   }
 }
 
-function createRoom(pub) {
-  const room = { code: makeCode(), pub, game: new Sim.Game({ lobby: true, pub }), clients: new Set() };
+function cfgKey(c) { return (c.kind ? 'm' + c.mode + 'x' + c.len : 't' + c.len) + (c.bots ? 'b' : 'n'); }
+function createRoom(pub, cfg) {
+  const game = new Sim.Game({ lobby: true, pub });
+  if (cfg) game.applyCfg(cfg);
+  const room = { code: makeCode(), pub, game, clients: new Set() };
   rooms.set(room.code, room);
   return room;
 }
 
-function findPublicRoom() {
+function findPublicRoom(cfg) {
+  const want = cfgKey(cfg);
   // лучше всего — комната в ожидании; иначе матч, который только начался
   let best = null, bs = -1;
   for (const r of rooms.values()) {
-    if (!r.pub) continue;
+    if (!r.pub || cfgKey(r.game.cfg) !== want) continue;
     const g = r.game, n = g.humans().length;
     if (n >= Sim.C.MAX) continue;
     let sc = -1;
@@ -81,7 +85,7 @@ function findPublicRoom() {
     else if (g.round <= 1 && g.phase !== 'final') sc = 50 + n;
     if (sc > bs) { bs = sc; best = r; }
   }
-  return best || createRoom(true);
+  return best || createRoom(true, cfg);
 }
 
 function send(ws, obj) {
@@ -119,12 +123,13 @@ wss.on('connection', (ws, req) => {
     if (m.t === 'join' && !ws.room) {
       if ((m.v | 0) !== Sim.C.PROTO) return send(ws, { t: 'err', e: 'old' });
       let room = null;
-      if (m.mode === 'create') room = createRoom(false);
+      const qcfg = { kind: m.kind ? 1 : 0, len: [1, 3, 5, 7].includes(m.len | 0) ? m.len | 0 : 3, mode: m.gm | 0, bots: m.bots === 0 ? 0 : 1 };
+      if (m.mode === 'create') room = createRoom(false, { bots: 0 });
       else if (m.mode === 'code') {
         room = rooms.get(String(m.code || '').toUpperCase().trim());
         if (!room) return send(ws, { t: 'err', e: 'noroom' });
         if (room.game.humans().length >= Sim.C.MAX) return send(ws, { t: 'err', e: 'full' });
-      } else room = findPublicRoom();
+      } else room = findPublicRoom(qcfg);
 
       const g = room.game;
       if (g.players.length >= Sim.C.MAX) {
@@ -143,7 +148,7 @@ wss.on('connection', (ws, req) => {
     else if (m.t === 'em') {
       const e = m.e | 0; if (e >= 0 && e < Sim.C.N_EMO) broadcast(ws.room, { t: 'em', id: ws.pid, e });
     } else if (m.t === 'ping') send(ws, { t: 'pong', ts: m.ts });
-    else if (m.t === 'cfg') g.setCfg(ws.pid, m);
+    else if (m.t === 'cfg') { if (!ws.room.pub) g.setCfg(ws.pid, m); }
     else if (m.t === 'start') {
       if (ws.pid === g.hostId) { if (!g.startMatch()) send(ws, { t: 'info', e: 'need2' }); }
     } else if (m.t === 'look') { // смена внешнего вида в ожидании

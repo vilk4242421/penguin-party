@@ -56,6 +56,13 @@
     ach() { [784, 988, 1175, 1568].forEach((f, i) => tone(f, i * 0.09, 0.22, 'triangle', 0.22)); },
     click() { tone(600, 0, 0.05, 'square', 0.08); },
     join() { tone(440, 0, 0.08, 'sine', 0.18); tone(660, 0.08, 0.12, 'sine', 0.18); },
+    tap() { tone(420 + Math.random() * 200, 0, 0.06, 'triangle', 0.14, 900); },
+    throw() { noise(0, 0.16, 0.2, 900, 2600); },
+    boom() { tone(80, 0, 0.6, 'sawtooth', 0.35, 25); noise(0, 0.5, 0.5, 1200, 90); },
+    crack() { noise(0, 0.12, 0.3, 4000, 1200, 'highpass'); tone(200, 0, 0.1, 'square', 0.08, 90); },
+    lap() { tone(740, 0, 0.1, 'square', 0.14); tone(988, 0.09, 0.16, 'square', 0.14); },
+    pad() { tone(300, 0, 0.25, 'sawtooth', 0.14, 900); },
+    hop() { tone(300, 0, 0.18, 'sine', 0.2, 700); },
     buy() { tone(523, 0, 0.1, 'triangle', 0.2); tone(784, 0.08, 0.1, 'triangle', 0.2); tone(1047, 0.16, 0.2, 'triangle', 0.2); },
   };
 

@@ -3,7 +3,7 @@
  * браузер ставит новую версию сам, а игра перезагружается (в меню — сразу, в матче — после выхода). */
 const BUILD = 'dev';
 const CACHE = 'penguin-sumo-' + BUILD;
-const FILES = ['./', 'index.html', 'game.js', 'sim.js', 'cosmetics.js', 'profile.js', 'audio.js', 'config.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'];
+const FILES = ['./', 'index.html', 'game.js', 'sim.js', 'cosmetics.js', 'profile.js', 'audio.js', 'config.js', 'scene.js', 'clicker.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => Promise.all(FILES.map((f) => c.add(new Request(f, { cache: 'reload' })).catch(() => {})))).then(() => self.skipWaiting()));
 });

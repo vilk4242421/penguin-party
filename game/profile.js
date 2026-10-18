@@ -1,4 +1,4 @@
-/* Penguin Sumo — профиль игрока: монеты, уровень, покупки, статистика, достижения */
+/* Пингвины — профиль игрока: монеты, уровень, покупки, статистика, достижения, кликер, секретные коды */
 (function (root) {
   'use strict';
   const KEY = 'ps_profile_v2';
@@ -6,25 +6,53 @@
 
   const DEF = () => ({
     name: '', coins: 0, xp: 0,
-    look: { c: 4, p: 0, h: 0, e: 0, t: 0 },
-    owned: { c: [], p: [], h: [], e: [], t: [] },
-    stats: { ko: 0, roundWins: 0, matchWins: 0, matches: 0, dashes: 0, picks: 0, falls: 0, bestKoRound: 0, friendMatches: 0 },
+    look: { c: 4, p: 0, h: 0, e: 0, t: 0, s: 0 },
+    owned: { c: [], p: [], h: [], e: [], t: [], s: [] },
+    stats: { ko: 0, roundWins: 0, matchWins: 0, matches: 0, dashes: 0, picks: 0, falls: 0, bestKoRound: 0, friendMatches: 0, tours: 0, tourWins: 0, modeMask: 0, taps: 0, podium: 0 },
     ach: {}, lastDaily: '',
+    clk: { fish: 0, total: 0, lp: 0, la: 0, done: 0, seen: 0 },
+    codes: {},
     opts: { sound: true, music: true, vibe: true },
   });
   let P = DEF();
 
+  /* ---------- кликер: параметры ---------- */
+  const CLK = {
+    GOAL: 80000, MAXL: 20,
+    STAGES: [0, 300, 3000, 20000, 80000],
+    LOOKS: [
+      { c: 4, p: 0, h: 0, e: 0, t: 0, s: 0 }, { c: 5, p: 0, h: 1, e: 0, t: 0, s: 0 }, { c: 0, p: 1, h: 0, e: 1, t: 0, s: 0 },
+      { c: 15, p: 0, h: 13, e: 0, t: 0, s: 0 }, { c: 16, p: 0, h: 15, e: 0, t: 0, s: 0 },
+    ],
+    NAMES: [['Малыш', 'Little one'], ['Рыбак', 'Fisher'], ['Крутой', 'Cool one'], ['Чемпион', 'Champion'], ['Легенда льдов', 'Ice legend']],
+    costP: (l) => Math.floor(12 * Math.pow(1.5, l)),
+    costA: (l) => Math.floor(40 * Math.pow(1.55, l)),
+    power: () => 1 + P.clk.lp,
+    stage: () => { let s = 0; for (let i = 0; i < CLK.STAGES.length; i++) if (P.clk.total >= CLK.STAGES[i]) s = i; return s; },
+  };
+
+  /* ---------- секретные коды (хранятся только хэши) ---------- */
+  const norm = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
+  const fnv = (s) => { let h = 0x811c9dc5; for (const ch of s) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16); };
+  const CODES = { '12809762': { slot: 's', idx: 1, id: 'veriti' } };
+
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) { const o = JSON.parse(raw); P = Object.assign(DEF(), o); P.look = Object.assign(DEF().look, o.look); P.stats = Object.assign(DEF().stats, o.stats); P.opts = Object.assign(DEF().opts, o.opts); P.owned = Object.assign(DEF().owned, o.owned); }
-      else { // миграция со старой версии
+      if (raw) {
+        const o = JSON.parse(raw), d = DEF();
+        P = Object.assign(d, o);
+        P.look = Object.assign(DEF().look, o.look); P.stats = Object.assign(DEF().stats, o.stats); P.opts = Object.assign(DEF().opts, o.opts);
+        P.owned = Object.assign(DEF().owned, o.owned); P.clk = Object.assign(DEF().clk, o.clk); P.codes = o.codes || {};
+      } else {
         const old = (k, d) => { try { const v = localStorage.getItem('ps_' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } };
         P.name = old('name', ''); P.opts.sound = old('sound', true);
       }
     } catch (e) { P = DEF(); }
-    // бесплатное — всегда «куплено»
     for (const slot of Object.keys(P.owned)) for (let i = 0; i < C.count(slot); i++) if (C.price(slot, i) === 0 && !P.owned[slot].includes(i)) P.owned[slot].push(i);
+    // экипированное, которого нет в наличии, снимаем
+    for (const k of Object.keys(P.look)) if (!P.owned[k] || !P.owned[k].includes(P.look[k])) P.look[k] = 0;
+    if (P.look.c === 0 && !P.owned.c.includes(0)) P.look.c = 4;
     return P;
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) {} }
@@ -37,13 +65,15 @@
   function buy(slot, i) {
     const pr = C.price(slot, i);
     if (owned(slot, i)) return true;
-    if (P.coins < pr) return false;
+    if (pr < 0 || P.coins < pr) return false;
     P.coins -= pr; P.owned[slot].push(i); save(); checkAch(); return true;
   }
+  function unlock(slot, i) { if (!owned(slot, i)) { P.owned[slot].push(i); save(); checkAch(); return true; } return false; }
   function equip(slot, i) { if (owned(slot, i)) { P.look[slot] = i; save(); return true; } return false; }
   const ownedCount = () => Object.keys(P.owned).reduce((s, k) => s + P.owned[k].length, 0);
 
   /* ---------- достижения ---------- */
+  const popc = (n) => { let c = 0; while (n) { c += n & 1; n >>= 1; } return c; };
   const ACH = [
     { id: 'rw1', ru: 'Первая победа', en: 'First win', dru: 'Выиграй раунд', den: 'Win a round', rew: 30, v: () => P.stats.roundWins, goal: 1 },
     { id: 'ko10', ru: 'Задира', en: 'Bully', dru: 'Скинь 10 соперников', den: 'Knock off 10 rivals', rew: 50, v: () => P.stats.ko, goal: 10 },
@@ -58,6 +88,12 @@
     { id: 'f10', ru: 'Закалка', en: 'Cold bath', dru: 'Упади в воду 10 раз', den: 'Fall in the water 10 times', rew: 30, v: () => P.stats.falls, goal: 10 },
     { id: 'fr', ru: 'С друзьями веселее', en: 'Friends', dru: 'Сыграй матч в комнате с друзьями', den: 'Play a match in a friends room', rew: 40, v: () => P.stats.friendMatches, goal: 1 },
     { id: 'wd', ru: 'Модник', en: 'Fashionista', dru: 'Собери 20 предметов гардероба', den: 'Own 20 wardrobe items', rew: 80, v: () => ownedCount(), goal: 20 },
+    { id: 'tr1', ru: 'Турнирщик', en: 'Tournament player', dru: 'Доиграй турнир до пьедестала', den: 'Finish a tournament', rew: 60, v: () => P.stats.tours, goal: 1 },
+    { id: 'tw1', ru: 'Чемпион турнира', en: 'Tournament champion', dru: 'Выиграй турнир', den: 'Win a tournament', rew: 150, v: () => P.stats.tourWins, goal: 1 },
+    { id: 'pod', ru: 'Пьедестал', en: 'On the podium', dru: 'Попади в тройку турнира 5 раз', den: 'Reach a top-3 finish 5 times', rew: 100, v: () => P.stats.podium, goal: 5 },
+    { id: 'all', ru: 'Универсал', en: 'All-rounder', dru: 'Выиграй раунд в 5 разных режимах', den: 'Win a round in 5 different modes', rew: 150, v: () => popc(P.stats.modeMask), goal: 5 },
+    { id: 'tap', ru: 'Рыбный магнат', en: 'Fish tycoon', dru: 'Сделай 1000 кликов в симуляторе', den: 'Tap 1000 times in the simulator', rew: 80, v: () => P.stats.taps, goal: 1000 },
+    { id: 'sim', ru: 'Прошёл симулятор', en: 'Simulator complete', dru: 'Пройди симулятор кликов', den: 'Complete the click simulator', rew: 200, v: () => (P.clk.done ? 1 : 0), goal: 1 },
   ];
   let onAch = null;
   function checkAch() {
@@ -65,6 +101,7 @@
   }
   function stat(k, n) { P.stats[k] = (P.stats[k] || 0) + (n == null ? 1 : n); save(); checkAch(); }
   function statMax(k, v) { if (v > (P.stats[k] || 0)) { P.stats[k] = v; save(); checkAch(); } }
+  function modeWin(id) { P.stats.modeMask |= 1 << id; save(); checkAch(); }
 
   /* ежедневный подарок */
   function daily() {
@@ -73,5 +110,20 @@
     P.lastDaily = key; earn(50); return 50;
   }
 
-  root.Profile = { load, save, get P() { return P; }, level, levelProgress, earn, owned, buy, equip, ACH, checkAch, stat, statMax, daily, set onAch(f) { onAch = f; }, ownedCount };
+  /* ---------- кликер ---------- */
+  function clickerReward() { // за прохождение симулятора: уникальный цвет и шляпа
+    if (P.clk.done) return false;
+    P.clk.done = 1; unlock('c', 16); unlock('h', 15); P.look.c = 16; P.look.h = 15; save(); checkAch(); return true;
+  }
+
+  /* ---------- коды ---------- */
+  function redeem(code) {
+    const h = fnv(norm(code)), c = CODES[h];
+    if (!c) return { ok: false };
+    const had = owned(c.slot, c.idx);
+    unlock(c.slot, c.idx); P.codes[c.id] = 1; P.look[c.slot] = c.idx; save();
+    return { ok: true, had, slot: c.slot, idx: c.idx };
+  }
+
+  root.Profile = { load, save, get P() { return P; }, level, levelProgress, earn, owned, buy, unlock, equip, ACH, checkAch, stat, statMax, modeWin, daily, set onAch(f) { onAch = f; }, ownedCount, CLK, clickerReward, redeem };
 })(window);
