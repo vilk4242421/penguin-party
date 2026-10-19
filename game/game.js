@@ -1077,7 +1077,12 @@ function initMenu() {
   }
   Pro.Acc.onChange = (s) => { renderAcc(); if (s === 'rejected' || s === 'conflict') { toast(T('accSt')[s]); refreshProfileUI(); } if (s === 'expired') toast(T('accSt').expired); };
   Pro.checkAcc();
-  $('bAcc').onclick = () => { Pro.checkAcc(); GA.init(); GA.play('click'); accReset = false; $('accMsg').textContent = ''; renderAcc(); showScreen('account'); };
+  async function showSrv() {
+    const el = $('accSrv'); if (!el) return; el.textContent = '';
+    try { const b = Pro.apiBase(), r = await fetch(b + '/stats', { cache: 'no-store' }), j = await r.json(); el.textContent = '🖥 ' + (b.replace(/^https?:\/\//, '') || location.host) + ' · ' + j.store + ' · ' + j.accounts + ' acc · ' + j.build; }
+    catch (e) { el.textContent = '🖥 ' + (Pro.apiBase() || location.host) + ' — ' + T('accE').net; }
+  }
+  $('bAcc').onclick = () => { showSrv(); Pro.checkAcc(); GA.init(); GA.play('click'); accReset = false; $('accMsg').textContent = ''; renderAcc(); showScreen('account'); };
   $('bAccBack').onclick = () => { GA.play('click'); showScreen('settings'); };
   $('bAccForgot').onclick = () => { accReset = !accReset; GA.play('click'); renderAcc(); };
   async function accGo(kind) {

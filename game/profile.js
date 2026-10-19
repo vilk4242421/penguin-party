@@ -199,5 +199,5 @@
     return { ok: true, had, slot: c.slot, idx: c.idx };
   }
 
-  root.Profile = { Acc, checkAcc, register, login, resetPass, logout, syncNow, get tampered() { return tampered; }, load, save, get P() { return P; }, level, levelProgress, earn, owned, buy, unlock, equip, ACH, checkAch, stat, statMax, modeWin, daily, set onAch(f) { onAch = f; }, ownedCount, CLK, clickerReward, redeem };
+  root.Profile = { apiBase, Acc, checkAcc, register, login, resetPass, logout, syncNow, get tampered() { return tampered; }, load, save, get P() { return P; }, level, levelProgress, earn, owned, buy, unlock, equip, ACH, checkAch, stat, statMax, modeWin, daily, set onAch(f) { onAch = f; }, ownedCount, CLK, clickerReward, redeem };
 })(window);
