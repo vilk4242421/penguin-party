@@ -1782,7 +1782,7 @@
       if (!this.rosterDirty) return null;
       this.rosterDirty = false;
       return {
-        list: this.players.map((p) => [p.id, p.name, p.look.c, p.look.p, p.look.h, p.look.e, p.look.t, p.look.s, p.bot ? 1 : 0]),
+        list: this.players.map((p) => [p.id, p.name, p.look.c, p.look.p, p.look.h, p.look.e, p.look.t, p.look.s, p.bot ? 1 : 0, p.adm ? 1 : 0]),
         host: this.hostId, cfg: [this.cfg.kind, this.cfg.len, this.cfg.mode, this.cfg.bots, this.cfg.chaos, this.cfg.diff, this.cfg.picks.slice()], pub: this.pub ? 1 : 0,
         plan: this.plan.slice(0, 10),
       };

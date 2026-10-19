@@ -210,7 +210,7 @@ function connect(joinMode, code, ex) {
     };
     const to = setTimeout(() => { if (!joined) retry(); }, 9000);
 
-    ws.onopen = () => ws.send(JSON.stringify({ t: 'join', v: C.PROTO, mode: joinMode, code, name: P.name || 'Penguin', look: lookNow(), kind: ex.kind || 0, picks: ex.picks || [], len: ex.len || 3, gm: ex.gm || 0, bots: ex.bots === 0 ? 0 : 1, diff: ex.diff == null ? diffSel : ex.diff }));
+    ws.onopen = () => ws.send(JSON.stringify({ t: 'join', v: C.PROTO, acc: Pro.Acc.token ? { name: Pro.Acc.name, token: Pro.Acc.token } : undefined, mode: joinMode, code, name: P.name || 'Penguin', look: lookNow(), kind: ex.kind || 0, picks: ex.picks || [], len: ex.len || 3, gm: ex.gm || 0, bots: ex.bots === 0 ? 0 : 1, diff: ex.diff == null ? diffSel : ex.diff }));
     ws.onerror = () => { if (!joined) retry(); };
     ws.onclose = () => {
       clearTimeout(to);
@@ -242,7 +242,7 @@ function connect(joinMode, code, ex) {
 
 function onRoster(m) {
   const prev = roster.size;
-  roster = new Map(m.list.map((r) => [r[0], { name: r[1], look: { c: r[2], p: r[3], h: r[4], e: r[5], t: r[6], s: r[7] }, bot: !!r[8] }]));
+  roster = new Map(m.list.map((r) => [r[0], { name: r[1], look: { c: r[2], p: r[3], h: r[4], e: r[5], t: r[6], s: r[7] }, bot: !!r[8], adm: !!r[9] }]));
   hostId = m.host; cfg = { kind: m.cfg[0], len: m.cfg[1], mode: m.cfg[2], bots: m.cfg[3], chaos: m.cfg[4], diff: m.cfg[5] == null ? 1 : m.cfg[5], picks: m.cfg[6] || [] }; roomPub = !!m.pub;
   if (roster.size > prev && prev > 0 && V && V.ph === 4) GA.play('join');
   lobbySig = '';
@@ -363,6 +363,7 @@ Pro.onAch = (a) => { toast(`🏆 ${T('achUnlocked')}: <b>${lang === 'ru' ? a.ru 
 /* ================= события ================= */
 const infoOf = (id) => roster.get(id) || { name: '…', look: { c: 4, p: 0, h: 0, e: 0, t: 0, s: 0 }, bot: false };
 const nameOf = (id) => infoOf(id).name;
+const ADM = '<span class="admtag">Admin</span>';
 const colOf = (id) => { const l = infoOf(id).look; return Cos.SKIN_COL[l.s] || Cos.color(l.c); };
 const posOf = (id) => (lastMap && lastMap.get(id)) || null;
 let curMd = 0;
@@ -659,7 +660,7 @@ function sceneList(now, dt) {
     an.face += wrapPi(target - an.face) * Math.min(1, dt * 14); an.walk += sp * dt * 0.06;
     let air = 0;
     if (p.airF) { if (!an.airOn) { an.airOn = true; an.airT = now; } air = Math.min(1, (now - an.airT) / 550); } else an.airOn = false;
-    const q = Object.assign({}, p, { name: info.name, look: info.look, face: an.face, walk: an.walk, isMe: p.id === myId, ring: p.id === myId && p.alive && !p.spec, air });
+    const q = Object.assign({}, p, { name: info.name, adm: info.adm, look: info.look, face: an.face, walk: an.walk, isMe: p.id === myId, ring: p.id === myId && p.alive && !p.spec, air });
     spawnTrails(q, an, dt, now);
     const em = emotes.get(p.id); if (em && em.until > now) q.emote = { e: EMOJI[em.e], k: (em.until - now) / 2200 };
     list.push(q);
@@ -733,7 +734,7 @@ function updateHud(now) {
     const live = ph === 1 && !!M.live;
     const liveTx = (p) => `${M.live}${p.a}${M.liveSuf || ''} · `;
     const sorted = V.players.filter((p) => !p.spec || p.score).sort((a, b) => (live ? b.a - a.a : 0) || b.score - a.score).slice(0, 6);
-    $('score').innerHTML = sorted.map((p) => { const inf = infoOf(p.id); return `<div class="${p.id === myId ? 'me' : ''} ${!p.alive && ph === 1 && !p.spec ? 'dead' : ''}"><i style="background:${(Cos.SKIN_COL[inf.look.s] || Cos.color(inf.look.c))}"></i>${esc(inf.name)}<b>${live ? `<span style="font-size:12px;opacity:.9">${liveTx(p)}</span>` : ''}${p.score}${lrMap.has(p.id) ? ` <u style="text-decoration:none;color:#9be8b0;font-size:12px">+${lrMap.get(p.id)}</u>` : ''}</b></div>`; }).join('');
+    $('score').innerHTML = sorted.map((p) => { const inf = infoOf(p.id); return `<div class="${p.id === myId ? 'me' : ''} ${!p.alive && ph === 1 && !p.spec ? 'dead' : ''}"><i style="background:${(Cos.SKIN_COL[inf.look.s] || Cos.color(inf.look.c))}"></i>${esc(inf.name)}${inf.adm ? ADM : ''}<b>${live ? `<span style="font-size:12px;opacity:.9">${liveTx(p)}</span>` : ''}${p.score}${lrMap.has(p.id) ? ` <u style="text-decoration:none;color:#9be8b0;font-size:12px">+${lrMap.get(p.id)}</u>` : ''}</b></div>`; }).join('');
   }
   // кнопка действия
   const dSig = (lobby ? -1 : md) + lang;
@@ -789,7 +790,7 @@ function updateOver(me) {
     overSig = sig;
     const rows = V.lr.map((r) => {
       const inf = infoOf(r[0]), pl = V.players.find((q) => q.id === r[0]);
-      return `<div class="r ${r[0] === myId ? 'me' : ''}"><span>${MEDALS[r[1] - 1] || r[1]}</span><i style="background:${(Cos.SKIN_COL[inf.look.s] || Cos.color(inf.look.c))}"></i><em>${esc(inf.name)}${r[0] === myId ? ' (' + T('youTag') + ')' : ''}</em><u>+${r[2]}</u><b>${pl ? pl.score : ''}</b></div>`;
+      return `<div class="r ${r[0] === myId ? 'me' : ''}"><span>${MEDALS[r[1] - 1] || r[1]}</span><i style="background:${(Cos.SKIN_COL[inf.look.s] || Cos.color(inf.look.c))}"></i><em>${esc(inf.name)}${inf.adm ? ADM : ''}${r[0] === myId ? ' (' + T('youTag') + ')' : ''}</em><u>+${r[2]}</u><b>${pl ? pl.score : ''}</b></div>`;
     }).join('');
     const wn = w ? (w[0] === myId ? T('youWon') : '🏆 ' + esc(nameOf(w[0]))) : T('draw');
     box.innerHTML = `<h2>${wn}</h2><div style="font-size:12px;opacity:.8;margin-bottom:4px">${MODES[V.md].icon} ${T('results')} · ${T('roundN', V.rd, V.rs)}</div>${rows}<p>${last ? '🏆 ' : T('nextIn') + ' '}${Math.max(1, Math.ceil(V.tm))}…</p>`;

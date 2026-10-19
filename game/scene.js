@@ -843,7 +843,15 @@
       // имя
       ctx.font = `bold ${nf}px "Trebuchet MS",system-ui,sans-serif`; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(5,30,60,.85)'; ctx.fillStyle = p.isMe ? '#ffd23f' : '#fff';
       ctx.strokeText(p.name, sx, yy - nf * 0.6); ctx.fillText(p.name, sx, yy - nf * 0.6);
-      if (p.isMe) { const by = yy - nf * 1.5 + Math.sin(t * 6) * 3; ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#0a2540'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(sx, by); ctx.lineTo(sx - 8, by - 12); ctx.lineTo(sx + 8, by - 12); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+      if (p.adm) { // «Admin» в жёлтой рамке над ником (создатель игры)
+        const fs = Math.max(11, nf * 0.85), ty = yy - nf * 1.95; ctx.font = `bold ${fs}px "Trebuchet MS",system-ui,sans-serif`;
+        const tw = ctx.measureText('Admin').width, bw = tw + fs * 0.9, bh = fs * 1.5;
+        ctx.fillStyle = 'rgba(10,30,60,.82)'; ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2;
+        ctx.beginPath(); (ctx.roundRect ? ctx.roundRect(sx - bw / 2, ty - bh * 0.78, bw, bh, 5) : ctx.rect(sx - bw / 2, ty - bh * 0.78, bw, bh)); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#ffd23f'; ctx.fillText('Admin', sx, ty);
+        ctx.font = `bold ${nf}px "Trebuchet MS",system-ui,sans-serif`;
+      }
+      if (p.isMe) { const by = yy - nf * (p.adm ? 3.3 : 1.5) + Math.sin(t * 6) * 3; ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#0a2540'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(sx, by); ctx.lineTo(sx - 8, by - 12); ctx.lineTo(sx + 8, by - 12); ctx.closePath(); ctx.fill(); ctx.stroke(); }
       if (p.emote) { ctx.font = `${Math.round(Math.max(30, u * 1.8))}px serif`; ctx.fillStyle = '#000'; ctx.fillText(p.emote.e, sx + u * 1.5, topY - u * 0.4 - (1 - p.emote.k) * 14); }
     }
     drawParts(ctx, cam, dt);

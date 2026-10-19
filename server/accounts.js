@@ -150,4 +150,15 @@ async function handle(req, res, url, send) {
   if (url === '/api/logout' && req.method === 'POST') { acc.tokens = arr(acc.tokens).filter((t) => t !== sha(tk)); await st.set(k, acc); return send(200, { ok: true }); }
   return send(404, { ok: false });
 }
-module.exports = { handle, getStore, codeId };
+// администраторы: ники через запятую в переменной окружения ADMINS (например ADMINS=Rybkis)
+const ADMINS = String(process.env.ADMINS || '').split(',').map((x) => keyOf(x)).filter(Boolean);
+// проверка токена аккаунта при входе в игру: возвращает true, если это подтверждённый администратор
+async function isAdmin(accIn) {
+  try {
+    if (!ADMINS.length || !accIn || typeof accIn.token !== 'string' || !/^[0-9a-f]{48}$/.test(accIn.token)) return false;
+    const k = keyOf(String(accIn.name || '')); if (!ADMINS.includes(k)) return false;
+    const acc = await getStore().get(k);
+    return !!(acc && arr(acc.tokens).includes(sha(accIn.token)));
+  } catch (e) { return false; }
+}
+module.exports = { handle, getStore, codeId, isAdmin };

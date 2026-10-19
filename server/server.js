@@ -148,7 +148,7 @@ wss.on('connection', (ws, req) => {
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (!m || typeof m !== 'object') return;
 
-    if (m.t === 'join' && !ws.room) {
+    if (m.t === 'join' && !ws.room && !ws.joining) {
       if ((m.v | 0) !== Sim.C.PROTO) return send(ws, { t: 'err', e: 'old' });
       let room = null;
       const qpicks = Array.isArray(m.picks) ? m.picks.slice(0, 10).map((v) => v | 0).filter((v, i, a) => v >= 0 && v < Sim.C.N_MODES && a.indexOf(v) === i) : [];
@@ -165,10 +165,15 @@ wss.on('connection', (ws, req) => {
         const bot = g.players.find(p => p.bot);
         if (bot) g.removePlayer(bot.id);
       }
-      const p = g.addPlayer(cleanName(m.name), m.look, false);
+      ws.joining = true;
+      accounts.isAdmin(m.acc).then((adm) => {
+      if (ws.readyState !== 1) { ws.joining = false; return; }
+      if (g.players.length >= Sim.C.MAX) { const bot2 = g.players.find((q) => q.bot); if (bot2) g.removePlayer(bot2.id); }
+      const p = g.addPlayer(cleanName(m.name), m.look, false); p.adm = adm; g.rosterDirty = true; ws.joining = false;
       ws.room = room; ws.pid = p.id; room.clients.add(ws);
       send(ws, { t: 'joined', id: p.id, code: room.code, pub: room.pub ? 1 : 0 });
       const r = g.takeRoster(); if (r) { r.t = 'r'; broadcast(room, r); }
+      });
       return;
     }
     if (!ws.room) return;
