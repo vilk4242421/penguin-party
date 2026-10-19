@@ -40,6 +40,8 @@ function getStore() {
 }
 
 /* ---------- утилиты ---------- */
+const ADMINS = String(process.env.ADMINS || '').split(',').map((x) => String(x || '').trim().toLowerCase()).filter(Boolean);
+
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const hashPass = (pw, salt) => crypto.scryptSync(pw, Buffer.from(salt, 'hex'), 32).toString('hex');
 const eq = (a, b) => { const x = Buffer.from(a), y = Buffer.from(b); return x.length === y.length && crypto.timingSafeEqual(x, y); };
@@ -106,7 +108,7 @@ async function handle(req, res, url, send) {
     const salt = crypto.randomBytes(16).toString('hex'), token = newToken(), rec = newRecovery();
     const acc = { name, salt, hash: hashPass(pw, salt), rec: sha(rec.replace(/-/g, '')), tokens: [sha(token)], profile: null, t: Date.now(), made: Date.now(), bonusC: 0 };
     await st.set(keyOf(name), acc);
-    return send(200, { ok: true, token, name, recovery: rec, profile: null });
+    return send(200, { ok: true, token, name, recovery: rec, profile: null, admin: ADMINS.includes(keyOf(name)), nAdm: ADMINS.length });
   }
   if (url === '/api/login' && req.method === 'POST') {
     const name = String(body.name || '').trim(), k = keyOf(name);
@@ -114,7 +116,7 @@ async function handle(req, res, url, send) {
     const acc = await st.get(k);
     if (!acc || !eq(hashPass(String(body.pass || ''), acc.salt), acc.hash)) return send(200, { ok: false, e: 'creds' });
     const token = newToken(); acc.tokens = arr(acc.tokens).slice(-7).concat(sha(token)); await st.set(k, acc);
-    return send(200, { ok: true, token, name: acc.name, profile: acc.profile });
+    return send(200, { ok: true, token, name: acc.name, profile: acc.profile, admin: ADMINS.includes(k), nAdm: ADMINS.length });
   }
   if (url === '/api/reset' && req.method === 'POST') {
     const k = keyOf(body.name);
@@ -131,7 +133,7 @@ async function handle(req, res, url, send) {
   if (tk) { k = keyOf(safeDec(req.headers['x-account'] || '')); acc = k ? await st.get(k) : null; if (acc && !arr(acc.tokens).includes(sha(tk))) acc = null; }
   if (!acc) return send(401, { ok: false, e: 'auth' });
 
-  if (url === '/api/profile' && req.method === 'GET') return send(200, { ok: true, name: acc.name, profile: acc.profile, v: acc.v || 0 });
+  if (url === '/api/profile' && req.method === 'GET') return send(200, { ok: true, name: acc.name, profile: acc.profile, v: acc.v || 0, admin: ADMINS.includes(k), nAdm: ADMINS.length });
   if (url === '/api/profile' && req.method === 'PUT') {
     if (limited('put:' + k, 60, 60 * 1000)) return send(429, { ok: false, e: 'wait' });
     const p = body.profile, why = sanitize(acc, p, Date.now());
@@ -151,7 +153,6 @@ async function handle(req, res, url, send) {
   return send(404, { ok: false });
 }
 // администраторы: ники через запятую в переменной окружения ADMINS (например ADMINS=Rybkis)
-const ADMINS = String(process.env.ADMINS || '').split(',').map((x) => keyOf(x)).filter(Boolean);
 // проверка токена аккаунта при входе в игру: возвращает true, если это подтверждённый администратор
 async function isAdmin(accIn) {
   try {
