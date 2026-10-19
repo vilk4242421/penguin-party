@@ -669,23 +669,25 @@
     const box = (lx, ly, zz, hx, hy, hz, col, ed) => { const [x, y] = W(lx, ly); drawBox(ctx, cam, x, y, zz, hx, hy, hz, rot, col, ed === undefined ? edge : ed); };
     const flat = (zz, fn) => ground(ctx, cam, () => { ctx.save(); ctx.translate(p.x, p.y + zoff(cam, zz)); ctx.rotate(rot); fn(); ctx.restore(); });
     const cl = L - hl - tl, cx = (tl - hl) * 1;                         // кабина: центр и полудлина
-    // контур кузова сверху (перед справа): капот сужается, корма чуть уже
-    const outline = (k, ax, bx) => {
-      const A = ax * k, B = bx * k;
-      ctx.beginPath(); ctx.moveTo(A, 0);
-      ctx.bezierCurveTo(A, B * 0.5, A * 0.88, B * 0.93, A * 0.55, B * 0.97);
-      ctx.lineTo(-A * 0.62, B); ctx.bezierCurveTo(-A * 0.92, B * 0.98, -A, B * 0.78, -A, B * 0.5);
-      ctx.lineTo(-A, -B * 0.5); ctx.bezierCurveTo(-A, -B * 0.78, -A * 0.92, -B * 0.98, -A * 0.62, -B);
-      ctx.lineTo(A * 0.55, -B * 0.97); ctx.bezierCurveTo(A * 0.88, -B * 0.93, A, -B * 0.5, A, 0); ctx.closePath();
+    // контур кузова сверху: скруглённый прямоугольник; у маслкара шире зад («бёдра») и уже талия
+    const prof = (x) => { const t = Math.max(-1, Math.min(1, x / L)); let m = 1 - 0.07 * Math.max(0, t);
+      if (sp.haunch) m *= 1 + 0.08 * Math.exp(-Math.pow((t + 0.62) / 0.3, 2)) - 0.05 * Math.exp(-Math.pow((t - 0.02) / 0.28, 2));
+      return Wd * m * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(t), 5)), 1 / 3.2); };
+    const outline = () => {
+      ctx.beginPath(); const n = 28;
+      for (let i = 0; i <= n; i++) { const x = L - 2 * L * i / n; if (i) ctx.lineTo(x, prof(x)); else ctx.moveTo(x, prof(x)); }
+      for (let i = n; i >= 0; i--) { const x = L - 2 * L * i / n; ctx.lineTo(x, -prof(x)); }
+      ctx.closePath();
     };
     // колёса: круглые, вынесены за борт кузова, вращаются при движении
     const rl = CAR_ROLL.get(p.id) || { x: p.x, y: p.y, ang: 0 };
     { const dx = p.x - rl.x, dy = p.y - rl.y; if (Math.abs(dx) < 150 && Math.abs(dy) < 150) rl.ang -= (dx * cr + dy * sr) / wr; rl.x = p.x; rl.y = p.y; CAR_ROLL.set(p.id, rl); }
-    const wh = [], TH = PR * 0.17, wOut = Wd + PR * 0.22;
-    for (const lx of [-0.62 * L, 0.62 * L]) for (const sd of [-1, 1]) wh.push({ lx, ly: sd * wOut, y: wy(lx, sd * wOut), sd });
+    const wh = [], TH = PR * 0.17;
+    for (const lx of [-0.62 * L, 0.62 * L]) for (const sd of [-1, 1]) { const wOut = Math.max(prof(lx), prof(lx - wr), prof(lx + wr)) + PR * 0.24; wh.push({ lx, ly: sd * wOut, y: wy(lx, sd * wOut), sd }); }
     wh.sort((m, n) => m.y - n.y);
     const wheelDraw = (w) => {
       const basis = (ly) => { const f = W(w.lx, ly), p0 = pr(cam, f[0], f[1], wr), p1 = pr(cam, f[0] + cr, f[1] + sr, wr), p2 = pr(cam, f[0], f[1], wr + 1); return [p1[0] - p0[0], p1[1] - p0[1], p2[0] - p0[0], p2[1] - p0[1], p0[0], p0[1]]; };
+      box(w.lx, w.ly, 0, wr * 0.25, TH, wr * 2, '#0e1015', null);      // протектор: виден, когда колесо в профиль к камере вдоль оси
       const outerVis = cr * w.sd > 0.0;
       const order = [0, 1, 2, 3, 4]; if (!outerVis) order.reverse();
       for (const k of order) {
@@ -715,11 +717,11 @@
     const N = 6;
     for (let i = 0; i <= N; i++) {
       const k = i / N, z = z0 + bh * k;
-      flat(z, () => { outline(1 - (1 - k) * 0.0, L, Wd); ctx.fillStyle = Sh(sp.col, -0.5 + 0.5 * k); ctx.fill(); if (i === 0) { ctx.strokeStyle = '#05080f'; ctx.lineWidth = PR * 0.05; ctx.stroke(); } });
+      flat(z, () => { outline(); ctx.fillStyle = Sh(sp.col, -0.5 + 0.5 * k); ctx.fill(); if (i === 0) { ctx.strokeStyle = '#05080f'; ctx.lineWidth = PR * 0.05; ctx.stroke(); } });
     }
     // верхняя поверхность: лаковый градиент поперёк, капот и багажник чуть светлее
     flat(top + PR * 0.01, () => {
-      outline(1, L, Wd); const g = ctx.createLinearGradient(0, -Wd, 0, Wd);
+      outline(); const g = ctx.createLinearGradient(0, -Wd, 0, Wd);
       g.addColorStop(0, Sh(sp.col, -0.18)); g.addColorStop(0.32, Sh(sp.col, 0.3)); g.addColorStop(0.55, sp.col); g.addColorStop(1, Sh(sp.col, -0.3));
       ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = PR * 0.035; ctx.stroke();
       const gl = ctx.createLinearGradient(-L, 0, L, 0); gl.addColorStop(0, 'rgba(255,255,255,0)'); gl.addColorStop(0.22, 'rgba(255,255,255,.16)'); gl.addColorStop(0.6, 'rgba(255,255,255,.28)'); gl.addColorStop(1, 'rgba(255,255,255,0)');
