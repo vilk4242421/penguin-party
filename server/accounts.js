@@ -18,6 +18,10 @@ function fileStore() {
     async set(k, v) { db[k] = v; if (!timer) timer = setTimeout(flush, 800); },
     async count() { return Object.keys(db).filter((n) => !n.startsWith('ip:')).length; },
     async names() { return Object.keys(db).filter((n) => !n.startsWith('ip:')); },
+    async top(kind, n) {
+      const rows = Object.keys(db).filter((k) => !k.startsWith('ip:')).map((k) => ({ k, n: db[k].name, v: kind === 'wins' ? (db[k].ow | 0) : Math.floor(Number(db[k].profile && db[k].profile.coins) || 0) })).filter((r) => r.v > 0);
+      rows.sort((a, b) => b.v - a.v || String(a.n).localeCompare(String(b.n))); return rows.slice(0, n);
+    },
     flush,
   };
 }
@@ -34,6 +38,11 @@ function pgStore(url) {
     async set(k, v) { await run('INSERT INTO accounts(name,data) VALUES($1,$2::jsonb) ON CONFLICT (name) DO UPDATE SET data=$2::jsonb', [k, JSON.stringify(v)]); },
     async count() { const r = await run("SELECT COUNT(*) FROM accounts WHERE name NOT LIKE 'ip:%'"); return +r.rows[0].count; },
     async names() { const r = await run("SELECT name FROM accounts WHERE name NOT LIKE 'ip:%'"); return r.rows.map((x) => x.name); },
+    async top(kind, n) {
+      const val = kind === 'wins' ? "COALESCE((data->>'ow')::bigint,0)" : "COALESCE(FLOOR((data->'profile'->>'coins')::numeric),0)";
+      const r = await run(`SELECT name AS k, data->>'name' AS n, ${val} AS v FROM accounts WHERE name NOT LIKE 'ip:%' AND ${val} > 0 ORDER BY v DESC, n LIMIT $1`, [n]);
+      return r.rows.map((x) => ({ k: x.k, n: x.n, v: Number(x.v) }));
+    },
     flush() {},
   };
 }
@@ -104,6 +113,9 @@ async function handle(req, res, url, send) {
   let body = {};
   if (req.method === 'POST' || req.method === 'PUT') { try { body = await readJson(req); } catch (e) { return send(400, { ok: false, e: 'bad' }); } }
 
+  if (url === '/api/top' && req.method === 'GET') {
+    try { return send(200, { ok: true, wins: await topList('wins'), coins: await topList('coins') }); } catch (e) { return send(200, { ok: false, e: 'err' }); }
+  }
   if (url === '/api/register' && req.method === 'POST') {
     if (limited('reg:' + ip, 5, 60 * 60 * 1000)) return send(429, { ok: false, e: 'wait' });
     const name = String(body.name || '').trim(), pw = String(body.pass || '');
@@ -160,13 +172,26 @@ async function handle(req, res, url, send) {
 }
 // администраторы: ники через запятую в переменной окружения ADMINS (например ADMINS=Rybkis)
 // проверка токена аккаунта при входе в игру: возвращает true, если это подтверждённый администратор
-async function isAdmin(accIn) {
+async function verify(accIn) { // подтверждённый вход: { k, name } или null
   try {
-    if (!ADMINS.length || !accIn || typeof accIn.token !== 'string' || !/^[0-9a-f]{48}$/.test(accIn.token)) return false;
-    const k = keyOf(String(accIn.name || '')); if (!ADMINS.includes(k)) return false;
+    if (!accIn || typeof accIn.token !== 'string' || !/^[0-9a-f]{48}$/.test(accIn.token)) return null;
+    const k = keyOf(String(accIn.name || '')); if (!k) return null;
     const acc = await getStore().get(k);
-    return !!(acc && arr(acc.tokens).includes(sha(accIn.token)));
-  } catch (e) { return false; }
+    return acc && arr(acc.tokens).includes(sha(accIn.token)) ? { k, name: acc.name } : null;
+  } catch (e) { return null; }
+}
+const isAdminKey = (k) => ADMINS.includes(k);
+async function isAdmin(accIn) { const v = await verify(accIn); return !!(v && isAdminKey(v.k)); }
+// победа в матче с живыми игроками
+async function addWin(k) {
+  try { const st = getStore(), acc = await st.get(k); if (!acc) return; acc.ow = (acc.ow | 0) + 1; await st.set(k, acc); topCache.clear(); } catch (e) { console.error('addWin:', e.message); }
+}
+const topCache = new Map();
+async function topList(kind) {
+  const c = topCache.get(kind); if (c && Date.now() - c.t < 20000) return c.v;
+  const rows = await getStore().top(kind, 50);
+  const v = rows.map((r) => ({ n: r.n, v: r.v, a: isAdminKey(r.k) ? 1 : 0 }));
+  topCache.set(kind, { t: Date.now(), v }); return v;
 }
 /* Аварийный сброс: переменная RESET_PASS=ник:новыйпароль — при запуске задаёт пароль аккаунту (или создаёт его). После входа УДАЛИ переменную. */
 async function startupTasks() {
@@ -183,4 +208,4 @@ async function startupTasks() {
     } else console.log('[acc] RESET_PASS: неверный формат (ник:пароль, пароль от 6 символов)');
   }
 }
-module.exports = { startupTasks, handle, getStore, codeId, isAdmin };
+module.exports = { startupTasks, handle, getStore, codeId, isAdmin, isAdminKey, verify, addWin };

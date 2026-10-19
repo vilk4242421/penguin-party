@@ -23,6 +23,7 @@ const L = {
     online: 'Играть онлайн', onlineSub: 'Быстрый турнир с живыми игроками', tournament: 'Турнир', modes: 'Режимы', friends: 'С друзьями (по коду)',
     create: 'Создать комнату', join: 'Войти', offline: 'Против ботов', offlineSub: 'Без интернета — быстрый турнир', install: '📲 Установить',
     clicker: 'Симулятор', wardrobe: 'Гардероб', achievements: 'Награды', settings: 'Настройки', back: 'Назад',
+    leaders: 'Лидеры', lbWins: '🏆 Победы', lbCoins: '🪙 Монеты', lbNote: 'Победы считаются в онлайн-матчах с живыми игроками. В списке — игроки с аккаунтом.', lbEmpty: 'Пока никого нет — стань первым!', lbLoad: 'Загрузка…', lbWinsU: 'поб.',
     account: 'Аккаунт', accSynced: 'Золото, покупки и прогресс сохраняются на сервере — зайди с другого устройства под этим ником и паролем.', accOut: 'Выйти', accInfo: 'Создай аккаунт, чтобы прогресс не терялся и был на всех устройствах. Без аккаунта можно играть как гость.', accUser: 'Ник аккаунта', accPass: 'Пароль (от 6 символов)', accRec: 'Код восстановления', accLogin: 'Войти', accReg: 'Создать аккаунт', accForgot: 'Забыл пароль?', accReset: 'Сменить пароль', accE: { name: 'Ник: 3–16 символов, буквы, цифры, _ и -', pass: 'Пароль: от 6 символов', taken: 'Такой ник уже занят', creds: 'Неверный ник или пароль', wait: 'Слишком много попыток, подожди немного', net: 'Нет связи с сервером', err: 'Ошибка, попробуй ещё раз' }, accDone: (n) => `Добро пожаловать, ${n}!`, accRecShow: (c) => `Твой код восстановления: ${c}\nЗапиши его — это единственный способ вернуть аккаунт при потере пароля.`, accSt: { ok: 'Синхронизировано', offline: 'Нет связи — синхронизация позже', rejected: 'Подозрительное изменение отклонено, профиль восстановлен с сервера', conflict: 'Профиль обновлён с другого устройства', expired: 'Сессия истекла — войди снова', err: 'Ошибка синхронизации' }, accGuest: 'Гость', accNoAdm: 'сервер не считает этот ник админом', accNoAdmEnv: 'на сервере не задана переменная ADMINS',
     sfx: 'Звуки', music: 'Музыка', vibe: 'Вибрация', language: 'Язык', update: '🔄 Обновить игру',
     tRand: '🎲 Случайные', tPick: '🎯 Свои режимы', pickHint: 'Выбери от 2 до 10 режимов — они пойдут по порядку', pickSel: (n) => `Выбрано режимов: ${n}`, sumPick: (n, b) => `🎯 Свои режимы: ${n}${b ? ' · с ботами' : ''}`,
@@ -56,6 +57,7 @@ const L = {
     online: 'Play online', onlineSub: 'Quick tournament with real players', tournament: 'Tournament', modes: 'Modes', friends: 'With friends (room code)',
     create: 'Create room', join: 'Join', offline: 'Vs bots', offlineSub: 'No internet — quick tournament', install: '📲 Install',
     clicker: 'Simulator', wardrobe: 'Wardrobe', achievements: 'Awards', settings: 'Settings', back: 'Back',
+    leaders: 'Leaders', lbWins: '🏆 Wins', lbCoins: '🪙 Coins', lbNote: 'Wins are counted in online matches with real players. Only players with an account are listed.', lbEmpty: 'Nobody yet — be the first!', lbLoad: 'Loading…', lbWinsU: 'wins',
     account: 'Account', accSynced: 'Coins, purchases and progress are saved on the server — sign in with this name and password on another device.', accOut: 'Sign out', accInfo: 'Create an account so progress is never lost and works on every device. You can also play as a guest.', accUser: 'Account name', accPass: 'Password (6+ chars)', accRec: 'Recovery code', accLogin: 'Sign in', accReg: 'Create account', accForgot: 'Forgot password?', accReset: 'Reset password', accE: { name: 'Name: 3–16 chars, letters, digits, _ and -', pass: 'Password: 6+ characters', taken: 'That name is taken', creds: 'Wrong name or password', wait: 'Too many tries, wait a bit', net: 'No connection to the server', err: 'Error, try again' }, accDone: (n) => `Welcome, ${n}!`, accRecShow: (c) => `Your recovery code: ${c}\nWrite it down — it is the only way back into the account if you lose the password.`, accSt: { ok: 'Synced', offline: 'Offline — will sync later', rejected: 'A suspicious change was rejected, profile restored from the server', conflict: 'Profile updated from another device', expired: 'Session expired — sign in again', err: 'Sync error' }, accGuest: 'Guest', accNoAdm: 'the server does not treat this name as admin', accNoAdmEnv: 'ADMINS is not set on the server',
     sfx: 'Sounds', music: 'Music', vibe: 'Vibration', language: 'Language', update: '🔄 Update game',
     tRand: '🎲 Random', tPick: '🎯 Pick modes', pickHint: 'Pick 2 to 10 modes — they play in this order', pickSel: (n) => `Modes picked: ${n}`, sumPick: (n, b) => `🎯 Picked modes: ${n}${b ? ' · with bots' : ''}`,
@@ -480,7 +482,7 @@ function handleEvents(evs) {
 }
 
 /* ================= жизненный цикл ================= */
-const SCREENS = ['menu', 'tourney', 'modes', 'clicker', 'wardrobe', 'achs', 'settings', 'account'];
+const SCREENS = ['menu', 'tourney', 'modes', 'clicker', 'wardrobe', 'achs', 'settings', 'account', 'toplist'];
 function showScreen(id) {
   for (const s of SCREENS) $(s).classList.toggle('hide', s !== id);
   if (id === 'clicker') Clicker.open();
@@ -735,7 +737,7 @@ function updateHud(now) {
     const live = ph === 1 && !!M.live;
     const liveTx = (p) => `${M.live}${p.a}${M.liveSuf || ''} · `;
     const sorted = V.players.filter((p) => !p.spec || p.score).sort((a, b) => (live ? b.a - a.a : 0) || b.score - a.score).slice(0, 6);
-    $('score').innerHTML = sorted.map((p) => { const inf = infoOf(p.id); return `<div class="${p.id === myId ? 'me' : ''} ${!p.alive && ph === 1 && !p.spec ? 'dead' : ''}"><i style="background:${(Cos.SKIN_COL[inf.look.s] || Cos.color(inf.look.c))}"></i>${esc(inf.name)}${inf.adm ? ADM : ''}<b>${live ? `<span style="font-size:12px;opacity:.9">${liveTx(p)}</span>` : ''}${p.score}${lrMap.has(p.id) ? ` <u style="text-decoration:none;color:#9be8b0;font-size:12px">+${lrMap.get(p.id)}</u>` : ''}</b></div>`; }).join('');
+    $('score').innerHTML = sorted.map((p) => { const inf = infoOf(p.id); return `<div class="${p.id === myId ? 'me' : ''} ${!p.alive && ph === 1 && !p.spec ? 'dead' : ''}"><i style="background:${(Cos.SKIN_COL[inf.look.s] || Cos.color(inf.look.c))}"></i><span class="nm">${esc(inf.name)}</span>${inf.adm ? ADM : ''}<b>${live ? `<span style="font-size:12px;opacity:.9">${liveTx(p)}</span>` : ''}${p.score}${lrMap.has(p.id) ? ` <u style="text-decoration:none;color:#9be8b0;font-size:12px">+${lrMap.get(p.id)}</u>` : ''}</b></div>`; }).join('');
   }
   // кнопка действия
   const dSig = (lobby ? -1 : md) + lang;
@@ -791,7 +793,7 @@ function updateOver(me) {
     overSig = sig;
     const rows = V.lr.map((r) => {
       const inf = infoOf(r[0]), pl = V.players.find((q) => q.id === r[0]);
-      return `<div class="r ${r[0] === myId ? 'me' : ''}"><span>${MEDALS[r[1] - 1] || r[1]}</span><i style="background:${(Cos.SKIN_COL[inf.look.s] || Cos.color(inf.look.c))}"></i><em>${esc(inf.name)}${inf.adm ? ADM : ''}${r[0] === myId ? ' (' + T('youTag') + ')' : ''}</em><u>+${r[2]}</u><b>${pl ? pl.score : ''}</b></div>`;
+      return `<div class="r ${r[0] === myId ? 'me' : ''}"><span>${MEDALS[r[1] - 1] || r[1]}</span><i style="background:${(Cos.SKIN_COL[inf.look.s] || Cos.color(inf.look.c))}"></i><em><span class="nm">${esc(inf.name)}${r[0] === myId ? ' (' + T('youTag') + ')' : ''}</span>${inf.adm ? ADM : ''}</em><u>+${r[2]}</u><b>${pl ? pl.score : ''}</b></div>`;
     }).join('');
     const wn = w ? (w[0] === myId ? T('youWon') : '🏆 ' + esc(nameOf(w[0]))) : T('draw');
     box.innerHTML = `<h2>${wn}</h2><div style="font-size:12px;opacity:.8;margin-bottom:4px">${MODES[V.md].icon} ${T('results')} · ${T('roundN', V.rd, V.rs)}</div>${rows}<p>${last ? '🏆 ' : T('nextIn') + ' '}${Math.max(1, Math.ceil(V.tm))}…</p>`;
@@ -1070,19 +1072,41 @@ function initMenu() {
   const accE = (e) => (T('accE')[e] || T('accE').err);
   function renderAcc() {
     const on = !!Pro.Acc.token;
+    renderMenuAcc();
     $('accIn').classList.toggle('hide', !on); $('accOut').classList.toggle('hide', on);
     $('accName').textContent = Pro.Acc.name; $('accRecBox').classList.toggle('hide', !accReset);
     $('bAccLogin').textContent = accReset ? T('accReset') : T('accLogin'); $('bAccReg').classList.toggle('hide', accReset);
-    $('accState').textContent = (T('accSt')[Pro.Acc.state] || '') + (on && Pro.Acc.admin != null ? ' · ' + (Pro.Acc.admin ? '👑 Admin' : (Pro.Acc.nAdm ? T('accNoAdm') : T('accNoAdmEnv'))) : '');
+    $('accState').textContent = (T('accSt')[Pro.Acc.state] || '');
   }
   Pro.Acc.onChange = (s) => { renderAcc(); if (s === 'rejected' || s === 'conflict') { toast(T('accSt')[s]); refreshProfileUI(); } if (s === 'expired') toast(T('accSt').expired); };
-  Pro.checkAcc();
-  async function showSrv() {
-    const el = $('accSrv'); if (!el) return; el.textContent = '';
-    try { const b = Pro.apiBase(), r = await fetch(b + '/stats', { cache: 'no-store' }), j = await r.json(); el.textContent = '🖥 ' + (b.replace(/^https?:\/\//, '') || location.host) + ' · ' + j.store + ' · ' + j.accounts + ' acc · ' + j.build; }
-    catch (e) { el.textContent = '🖥 ' + (Pro.apiBase() || location.host) + ' — ' + T('accE').net; }
+  Pro.checkAcc(); renderMenuAcc();
+  // ---- меню: ник аккаунта и Admin ----
+  function renderMenuAcc() {
+    const el = $('menuAcc'); if (!el) return;
+    const on = !!Pro.Acc.token;
+    el.classList.toggle('hide', !on);
+    el.innerHTML = on ? `<span>👤 ${esc(Pro.Acc.name)}</span>${Pro.Acc.admin ? ADM : ''}` : '';
   }
-  $('bAcc').onclick = () => { showSrv(); Pro.checkAcc(); GA.init(); GA.play('click'); accReset = false; $('accMsg').textContent = ''; renderAcc(); showScreen('account'); };
+  window.renderMenuAcc = renderMenuAcc;
+  // ---- таблица лидеров ----
+  let lbTab = 'wins', lbData = null;
+  async function loadTop() {
+    $('lbList').innerHTML = `<div class="lbempty">${T('lbLoad')}</div>`;
+    try { const r = await fetch(Pro.apiBase() + '/api/top', { cache: 'no-store' }); const j = await r.json(); lbData = j.ok ? j : null; } catch (e) { lbData = null; }
+    drawTop();
+  }
+  function drawTop() {
+    $('tbWins').classList.toggle('on', lbTab === 'wins'); $('tbCoins').classList.toggle('on', lbTab === 'coins');
+    if (!lbData) { $('lbList').innerHTML = `<div class="lbempty">${T('accE').net}</div>`; return; }
+    const rows = lbData[lbTab] || [], mine = (Pro.Acc.name || '').toLowerCase();
+    if (!rows.length) { $('lbList').innerHTML = `<div class="lbempty">${T('lbEmpty')}</div>`; return; }
+    $('lbList').innerHTML = rows.map((r, i) => `<div class="lbr ${mine && r.n.toLowerCase() === mine ? 'me' : ''} ${i === 0 ? 't1' : ''}"><span class="rk">${MEDALS[i] || i + 1}</span><span class="nm">${esc(r.n)}</span>${r.a ? ADM : ''}<b>${lbTab === 'coins' ? '🪙 ' : ''}${r.v}${lbTab === 'wins' ? ' ' + T('lbWinsU') : ''}</b></div>`).join('');
+  }
+  $('bTop').onclick = () => { GA.init(); GA.play('click'); lbTab = 'wins'; showScreen('toplist'); loadTop(); };
+  $('tbWins').onclick = () => { GA.play('click'); lbTab = 'wins'; drawTop(); };
+  $('tbCoins').onclick = () => { GA.play('click'); lbTab = 'coins'; drawTop(); };
+  $('bTopBack').onclick = () => { GA.play('click'); showScreen('menu'); };
+  $('bAcc').onclick = () => { Pro.checkAcc(); GA.init(); GA.play('click'); accReset = false; $('accMsg').textContent = ''; renderAcc(); showScreen('account'); };
   $('bAccBack').onclick = () => { GA.play('click'); showScreen('settings'); };
   $('bAccForgot').onclick = () => { accReset = !accReset; GA.play('click'); renderAcc(); };
   async function accGo(kind) {

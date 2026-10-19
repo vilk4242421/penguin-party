@@ -169,10 +169,10 @@ wss.on('connection', (ws, req) => {
         if (bot) g.removePlayer(bot.id);
       }
       ws.joining = true;
-      accounts.isAdmin(m.acc).then((adm) => {
+      accounts.verify(m.acc).then((vf) => { const adm = !!(vf && accounts.isAdminKey(vf.k));
       if (ws.readyState !== 1) { ws.joining = false; return; }
       if (g.players.length >= Sim.C.MAX) { const bot2 = g.players.find((q) => q.bot); if (bot2) g.removePlayer(bot2.id); }
-      const p = g.addPlayer(cleanName(m.name), m.look, false); p.adm = adm; g.rosterDirty = true; ws.joining = false;
+      const p = g.addPlayer(cleanName(m.name), m.look, false); p.adm = adm; p.accKey = vf ? vf.k : ''; g.rosterDirty = true; ws.joining = false;
       ws.room = room; ws.pid = p.id; room.clients.add(ws);
       send(ws, { t: 'joined', id: p.id, code: room.code, pub: room.pub ? 1 : 0 });
       const r = g.takeRoster(); if (r) { r.t = 'r'; broadcast(room, r); }
@@ -216,6 +216,15 @@ setInterval(() => {
     acc -= TICK; tick++;
     for (const room of rooms.values()) {
       room.game.step(TICK);
+      { const g = room.game; // победа в матче с живыми игроками → в таблицу лидеров
+        if (g.phase === 'final') {
+          if (!room.fin) {
+            room.fin = true;
+            const humans = g.players.filter((q) => !q.bot && q.rounds > 0);
+            const w = g.players.find((q) => q.id === g.ranking[0]);
+            if (humans.length >= 2 && w && !w.bot && w.accKey) accounts.addWin(w.accKey);
+          }
+        } else room.fin = false; }
       if (tick % SNAP_EVERY === 0) {
         const r = room.game.takeRoster();
         if (r) { r.t = 'r'; broadcast(room, r); }

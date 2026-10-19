@@ -37,7 +37,17 @@ h2{margin:0 0 8px;font-size:24px;text-shadow:0 2px 0 #0a2f55}
 .inp{width:100%;padding:11px 14px;margin:5px 0;border-radius:14px;border:2px solid rgba(255,255,255,.5);background:rgba(255,255,255,.92);color:#0a2f55;font-size:17px;font-weight:700;text-align:center;outline:none}
 .inp:focus{border-color:var(--accent)}
 .accmsg{min-height:20px;font-size:14px;margin:6px 0;opacity:.95;white-space:pre-line;user-select:text;-webkit-user-select:text}
-.admtag{display:inline-block;margin-left:5px;padding:0 5px;border:2px solid #ffd23f;border-radius:6px;color:#ffd23f;font-size:.72em;font-weight:800;line-height:1.35;vertical-align:middle;background:rgba(10,30,60,.55)}
+.admtag{display:inline-flex;align-items:center;justify-content:center;flex:none;margin-left:6px;padding:2px 6px 3px;border:2px solid #ffd23f;border-radius:7px;background:linear-gradient(180deg,rgba(255,214,70,.30),rgba(255,150,20,.16));color:#ffd23f;font-size:.7em;font-weight:900;line-height:1;letter-spacing:.4px;text-shadow:none;vertical-align:middle;box-shadow:0 0 8px rgba(255,210,63,.35)}
+.nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.menuacc{display:flex;align-items:center;justify-content:center;gap:2px;margin:-2px 0 6px;font-weight:800;font-size:15px;min-height:22px}
+.menuacc .admtag{font-size:12px;margin-left:8px}
+.tabs{display:flex;gap:8px;margin:4px 0 8px}.tabs button{flex:1;padding:10px 6px;border-radius:13px;background:rgba(255,255,255,.18);font-weight:800;font-size:15px;border:2px solid transparent}.tabs button.on{background:rgba(255,159,28,.6);border-color:#ffd23f}
+#lbList{max-height:min(52vh,420px);overflow:auto;text-align:left;-webkit-overflow-scrolling:touch}
+.lbr{display:flex;align-items:center;gap:8px;padding:6px 10px;margin:3px 0;border-radius:12px;background:rgba(255,255,255,.1);font-weight:700;font-size:15px}
+.lbr.me{background:rgba(255,159,28,.55)}.lbr.t1{background:linear-gradient(90deg,rgba(255,214,70,.38),rgba(255,255,255,.1))}
+.lbr .rk{width:30px;text-align:center;font-size:17px;flex:none}.lbr .nm{flex:0 1 auto}.lbr b{flex:none;margin-left:auto;color:#ffe08a}
+.lbempty{padding:18px 8px;text-align:center;opacity:.8;font-size:14px}
+
 .accnote{font-size:12px;opacity:.75;margin:4px 0}
 .lvlbar{display:flex;align-items:center;gap:8px;margin:8px 2px 2px;font-size:14px;font-weight:700}
 .lvlbar .bar{flex:1;height:10px;border-radius:6px;background:rgba(0,0,0,.3);overflow:hidden}
@@ -208,9 +218,9 @@ body.fin #toasts{top:100px;left:8px;right:auto;align-items:flex-start;max-width:
 #over h2{font-size:20px;margin:0 0 6px}
 #over div.r{display:flex;align-items:center;gap:8px;padding:4px 8px;margin:3px 0;border-radius:11px;background:rgba(255,255,255,.1);font-weight:700;font-size:15px}
 #over div.r.me{background:rgba(255,159,28,.55)}
-#over .r span{width:24px;font-size:18px}
+#over .r>span{width:24px;font-size:18px}
 #over .r i{width:12px;height:12px;border-radius:50%;border:2px solid #fff;flex:none}
-#over .r em{font-style:normal;flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#over .r em{font-style:normal;flex:1;min-width:0;text-align:left;display:flex;align-items:center}
 #over .r u{text-decoration:none;color:#9be8b0;font-size:13px}
 #over p{margin:6px 0 0;font-size:13px;opacity:.9}
 #final{top:auto;bottom:max(10px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(380px,94vw);padding:10px 12px;pointer-events:auto}
@@ -237,6 +247,7 @@ body.fin #toasts{top:100px;left:8px;right:auto;align-items:flex-start;max-width:
   <div class="card">
     <canvas id="prev" class="prev" width="260" height="260" style="width:130px;height:130px"></canvas>
     <h1 data-t="title">Пингвины</h1><div class="byline">By Rybkis</div>
+    <div class="menuacc hide" id="menuAcc"></div>
     <p class="tag" data-t="tag">Турниры, гонки и сумо на льдинах!</p>
     <input id="name" maxlength="14" autocomplete="off" data-ph="yourName" placeholder="Твоё имя">
     <div class="lvlbar"><span id="lvlTxt"></span><div class="bar"><i id="lvlFill"></i></div><b id="coinsTxt"></b></div>
@@ -252,7 +263,7 @@ body.fin #toasts{top:100px;left:8px;right:auto;align-items:flex-start;max-width:
     </div>
     <div class="diffrow"><span data-t="diffS">Боты:</span><div class="chips mini" id="menuDiff"></div></div>
     <button class="btn sub" id="bOffline"><span data-t="offline">Против ботов</span><small data-t="offlineSub">Без интернета — быстрый турнир</small></button>
-    <div class="row"><button class="mini" id="bClk">🐟 <span data-t="clicker">Симулятор</span></button><button class="mini" id="bWard">👗 <span data-t="wardrobe">Гардероб</span></button><button class="mini" id="bAch">🏆</button><button class="mini" id="bSet">⚙️</button><button class="mini hide" id="bInstall" data-t="install">📲 Установить</button></div>
+    <div class="row"><button class="mini" id="bClk">🐟 <span data-t="clicker">Симулятор</span></button><button class="mini" id="bWard">👗 <span data-t="wardrobe">Гардероб</span></button><button class="mini" id="bTop">🏅</button><button class="mini" id="bAch">🏆</button><button class="mini" id="bSet">⚙️</button><button class="mini hide" id="bInstall" data-t="install">📲 Установить</button></div>
     <div id="msg"></div>
     <div id="online"></div>
     <div id="ver"></div>
@@ -334,6 +345,16 @@ body.fin #toasts{top:100px;left:8px;right:auto;align-items:flex-start;max-width:
   </div>
 </div>
 
+<div id="toplist" class="screen hide">
+  <div class="card">
+    <h2>🏅 <span data-t="leaders">Лидеры</span></h2>
+    <div class="tabs"><button id="tbWins" class="on" data-t="lbWins">🏆 Победы</button><button id="tbCoins" data-t="lbCoins">🪙 Монеты</button></div>
+    <div id="lbList"></div>
+    <div class="accnote" id="lbNote" data-t="lbNote">Победы считаются в онлайн-матчах с живыми игроками. В списке — игроки с аккаунтом.</div>
+    <button class="btn sub" id="bTopBack" data-t="back">Назад</button>
+  </div>
+</div>
+
 <div id="account" class="screen hide">
   <div class="card">
     <h2>👤 <span data-t="account">Аккаунт</span></h2>
@@ -353,7 +374,6 @@ body.fin #toasts{top:100px;left:8px;right:auto;align-items:flex-start;max-width:
       <button class="mini" id="bAccForgot" data-t="accForgot">Забыл пароль?</button>
     </div>
     <div class="accmsg" id="accMsg"></div>
-    <div class="accnote" id="accSrv" style="opacity:.7;font-size:12px;word-break:break-all"></div>
     <button class="btn sub" id="bAccBack" data-t="back">Назад</button>
   </div>
 </div>
