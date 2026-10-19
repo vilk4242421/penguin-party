@@ -642,7 +642,7 @@
 
   /* ---------- 7. Снежный обвал ---------- */
   MODES.push({
-    id: 7, key: 'slide', icon: '⛰️', timed: 0, view: { r: 400 },
+    id: 7, key: 'slide', icon: '⛰️', timed: 0, view: { r: 400 }, hearts: 1,
     ru: { name: 'Снежный обвал', goal: 'Уворачивайся от катящихся глыб. Прыжок даёт миг неуязвимости. 3 сердца!', btn: 'ПРЫЖОК' },
     en: { name: 'Avalanche', goal: 'Dodge the rolling boulders. A hop makes you untouchable for a moment. 3 hearts!', btn: 'HOP' },
     phys: { acc: 1000, fric: 2.2, dashV: 0, dashT: 0, dashCD: 1.6 },

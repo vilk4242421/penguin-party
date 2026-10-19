@@ -400,9 +400,9 @@
       for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
         const x = i / (N - 1) * 2 - 1, y = j / (N - 1) * 2 - 1;
         const h = ph + 0.42 * (x + y) + 0.12 * Math.sin(x * 2.4 + t / 1700) + 0.1 * Math.cos(y * 2.8 - t / 2100), k = (j * N + i) * 4;
-        d[k] = 255 * Math.max(0, Math.min(1, 0.62 + 0.5 * Math.cos(TAU * h)));
-        d[k + 1] = 255 * Math.max(0, Math.min(1, 0.62 + 0.5 * Math.cos(TAU * (h + 0.3333))));
-        d[k + 2] = 255 * Math.max(0, Math.min(1, 0.62 + 0.5 * Math.cos(TAU * (h + 0.6667))));
+        d[k] = 255 * Math.max(0, Math.min(1, 0.46 + 0.62 * Math.cos(TAU * h)));
+        d[k + 1] = 255 * Math.max(0, Math.min(1, 0.46 + 0.62 * Math.cos(TAU * (h + 0.3333))));
+        d[k + 2] = 255 * Math.max(0, Math.min(1, 0.46 + 0.62 * Math.cos(TAU * (h + 0.6667))));
         d[k + 3] = 255;
       }
       cvs.getContext('2d').putImageData(im, 0, 0);
@@ -411,20 +411,20 @@
     } else { ctx.fillStyle = g; circ(ctx, 0, cy, r); ctx.fill(); ctx.stroke(); }
     if (rainbow) { // мягкая объёмная тень/свет поверх колеса — переход выглядит гладким
       const sg = ctx.createRadialGradient(-0.4, cy - 0.5, 0.1, 0.1, cy + 0.1, r * 1.15);
-      sg.addColorStop(0, 'rgba(255,255,255,.4)'); sg.addColorStop(0.55, 'rgba(255,255,255,.1)'); sg.addColorStop(1, 'rgba(60,20,100,.08)');
+      sg.addColorStop(0, 'rgba(255,255,255,.2)'); sg.addColorStop(0.55, 'rgba(255,255,255,.03)'); sg.addColorStop(1, 'rgba(40,10,80,.14)');
       ctx.fillStyle = sg; circ(ctx, 0, cy, r - 0.03); ctx.fill();
     }
     ctx.fillStyle = 'rgba(255,255,255,.35)'; ell(ctx, -0.45, cy - 0.6, 0.38, 0.22, -0.7); ctx.fill();
     if (rainbow) { // переливающийся блеск + искорки
       const t = o.t || 0; ctx.save(); circ(ctx, 0, cy, r - 0.03); ctx.clip();
       const sh = ctx.createLinearGradient(-r + ((t / 1400) % 2) * r * 2.4 - r * 0.4, cy - r, -r + ((t / 1400) % 2) * r * 2.4 + r * 0.4, cy + r);
-      sh.addColorStop(0, 'rgba(255,255,255,0)'); sh.addColorStop(0.5, 'rgba(255,255,255,.5)'); sh.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = sh; ctx.fillRect(-r, cy - r, r * 2, r * 2); ctx.restore();
+      sh.addColorStop(0, 'rgba(255,255,255,0)'); sh.addColorStop(0.5, 'rgba(255,255,255,.28)'); sh.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = sh; ctx.fillRect(-r, cy - r, r * 2, r * 2); ctx.restore();
       // блеск: две полосы света разной скорости + пульсирующий глянцевый блик + мелкие мерцающие точки
       const band = (sp, off, w, al) => { const x = -r * 1.6 + (((t / sp) + off) % 1) * r * 3.2; const bg = ctx.createLinearGradient(x - w, cy - r, x + w, cy + r); bg.addColorStop(0, 'rgba(255,255,255,0)'); bg.addColorStop(0.5, `rgba(255,255,255,${al})`); bg.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = bg; ctx.fillRect(-r, cy - r, r * 2, r * 2); };
       ctx.save(); circ(ctx, 0, cy, r - 0.03); ctx.clip();
-      band(2300, 0.5, r * 0.22, 0.45); band(3700, 0.1, r * 0.12, 0.35);
+      band(2300, 0.5, r * 0.22, 0.28); band(3700, 0.1, r * 0.12, 0.2);
       const gp = 0.45 + 0.25 * Math.sin(t / 300), hg = ctx.createRadialGradient(-0.5, cy - 0.65, 0.02, -0.5, cy - 0.65, 0.65);
-      hg.addColorStop(0, `rgba(255,255,255,${gp + 0.3})`); hg.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = hg; circ(ctx, -0.5, cy - 0.65, 0.65); ctx.fill();
+      hg.addColorStop(0, `rgba(255,255,255,${gp * 0.7 + 0.15})`); hg.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = hg; circ(ctx, -0.5, cy - 0.65, 0.65); ctx.fill();
       ctx.restore();
       // блеск в виде четырёхугольной звёздочки (✦): плавно разгорается и тает
       const star4 = (x, y, s) => { ctx.beginPath(); ctx.moveTo(x, y - s); ctx.quadraticCurveTo(x, y, x + s, y); ctx.quadraticCurveTo(x, y, x, y + s); ctx.quadraticCurveTo(x, y, x - s, y); ctx.quadraticCurveTo(x, y, x, y - s); ctx.closePath(); };

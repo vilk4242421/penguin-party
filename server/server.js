@@ -216,13 +216,17 @@ setInterval(() => {
     acc -= TICK; tick++;
     for (const room of rooms.values()) {
       room.game.step(TICK);
-      { const g = room.game; // победа в матче с живыми игроками → в таблицу лидеров
+      { const g = room.game; // победа в матче с живыми игроками (публичная комната или по коду) → в таблицу лидеров
+        if (g.phase === 'lobby') room.mh = 0;
+        else if (g.phase !== 'final') room.mh = Math.max(room.mh || 0, g.players.filter((q) => !q.bot).length);
         if (g.phase === 'final') {
           if (!room.fin) {
             room.fin = true;
             const humans = g.players.filter((q) => !q.bot && q.rounds > 0);
             const w = g.players.find((q) => q.id === g.ranking[0]);
-            if (humans.length >= 2 && w && !w.bot && w.accKey) accounts.addWin(w.accKey);
+            // живых было двое и больше в течение матча (даже если кто-то вышел до конца)
+            if (Math.max(room.mh || 0, humans.length) >= 2 && w && !w.bot && w.accKey) { accounts.addWin(w.accKey); console.log('[win]', w.accKey, room.pub ? 'public' : 'code'); }
+            room.mh = 0;
           }
         } else room.fin = false; }
       if (tick % SNAP_EVERY === 0) {
