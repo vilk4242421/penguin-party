@@ -13,7 +13,7 @@
     MAX: 8, MIN_TOTAL: 5,
     INTRO: 3.6, COUNT: 3.2, OVER: 5.5, FINAL: 16,
     LOBBY_SOLO: 15, LOBBY_MULTI: 8, LOBBY_AFTER: 7,
-    N_COLORS: 17, N_PAT: 6, N_HAT: 32, N_EYE: 13, N_TRAIL: 16, N_SKIN: 5, N_EMO: 8,
+    N_COLORS: 17, N_PAT: 6, N_HAT: 32, N_EYE: 13, N_TRAIL: 16, N_SKIN: 5, N_CAR: 6, N_EMO: 8,
     LENS: [3, 5, 7],
     SHRINK_DELAY: 5, SHRINK_RATE: 11, BOOST_T: 6, SHIELD_T: 6, FREEZE_T: 1.6, WIND_F: 420,
     N_MODES: 19,
@@ -30,7 +30,7 @@
   function cleanLook(l) {
     l = l || {};
     const n = (v, m) => { v = v | 0; return v >= 0 && v < m ? v : 0; };
-    return { c: n(l.c, C.N_COLORS), p: n(l.p, C.N_PAT), h: n(l.h, C.N_HAT), e: n(l.e, C.N_EYE), t: n(l.t, C.N_TRAIL), s: n(l.s, C.N_SKIN) };
+    return { c: n(l.c, C.N_COLORS), p: n(l.p, C.N_PAT), h: n(l.h, C.N_HAT), e: n(l.e, C.N_EYE), t: n(l.t, C.N_TRAIL), s: n(l.s, C.N_SKIN), k: n(l.k, C.N_CAR) };
   }
 
   /* ---------- геометрия режимов (используется и клиентом) ---------- */
@@ -1802,7 +1802,7 @@
       if (!this.rosterDirty) return null;
       this.rosterDirty = false;
       return {
-        list: this.players.map((p) => [p.id, p.name, p.look.c, p.look.p, p.look.h, p.look.e, p.look.t, p.look.s, p.bot ? 1 : 0, p.adm ? 1 : 0]),
+        list: this.players.map((p) => [p.id, p.name, p.look.c, p.look.p, p.look.h, p.look.e, p.look.t, p.look.s, p.bot ? 1 : 0, p.adm ? 1 : 0, p.look.k | 0]),
         host: this.hostId, cfg: [this.cfg.kind, this.cfg.len, this.cfg.mode, this.cfg.bots, this.cfg.chaos, this.cfg.diff, this.cfg.picks.slice()], pub: this.pub ? 1 : 0,
         plan: this.plan.slice(0, 10),
       };

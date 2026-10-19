@@ -36,7 +36,7 @@ const L = {
     rounds: 'Раундов:', pickMode: 'Режим:', roomSet: 'Настройки комнаты', format: 'Формат:', fTour: '🏆 Турнир', fSeries: '🎮 Один режим', ok: 'Готово',
     enter: 'Ввести', promoPh: 'Секретный код', badCode: 'Такого кода нет', codeNet: 'Нет связи с сервером — коды работают только онлайн', codeWait: 'Слишком много попыток, подожди минуту', codeOk: (n) => `🎉 Получено: ${n}!`, codeCoins: (n) => `🎉 +${n} 🪙 золота!`, codeC67: (n) => `🎉 +${n} монет 67!`, codeHad: 'Этот приз уже у тебя — надето!',
     lockClicker: '🎣 Выдаётся за прохождение симулятора', lockCode: '🔑 Выдаётся по секретному коду', lkClicker: '🎣 за прохождение симулятора', lkCode: '🔑 по секретному коду',
-    tabs: 'Облик', tabc: 'Цвет', tabp: 'Узор', tabh: 'Шляпа', tabe: 'Очки', tabt: 'След',
+    tabs: 'Облик', tabc: 'Цвет', tabp: 'Узор', tabh: 'Шляпа', tabe: 'Очки', tabt: 'След', tabk: 'Машина',
     dash: 'РЫВОК', go: 'ВПЕРЁД!', round: 'Раунд', draw: 'Ничья!', youWon: 'ТЫ ПОБЕДИЛ!', fell: 'Ты выбыл! 🌊', watching: 'Смотришь за боем', nextRound: 'Войдёшь в следующем раунде',
     alive: 'Живы', connecting: 'Подключаемся…', waking: 'Сервер просыпается, подождите до минуты…',
     noServer: 'Сервер недоступен. Попробуй позже или играй против ботов.', noRoom: 'Комната не найдена', full: 'Комната заполнена',
@@ -70,7 +70,7 @@ const L = {
     rounds: 'Rounds:', pickMode: 'Mode:', roomSet: 'Room settings', format: 'Format:', fTour: '🏆 Tournament', fSeries: '🎮 Single mode', ok: 'Done',
     enter: 'Enter', promoPh: 'Secret code', badCode: 'No such code', codeNet: 'No connection to the server — codes need internet', codeWait: 'Too many tries, wait a minute', codeOk: (n) => `🎉 Unlocked: ${n}!`, codeCoins: (n) => `🎉 +${n} 🪙 gold!`, codeC67: (n) => `🎉 +${n} 67-coins!`, codeHad: 'You already have it — equipped!',
     lockClicker: '🎣 Given for completing the simulator', lockCode: '🔑 Unlocked with a secret code', lkClicker: '🎣 for completing the simulator', lkCode: '🔑 secret code',
-    tabs: 'Skin', tabc: 'Color', tabp: 'Pattern', tabh: 'Hat', tabe: 'Eyewear', tabt: 'Trail',
+    tabs: 'Skin', tabc: 'Color', tabp: 'Pattern', tabh: 'Hat', tabe: 'Eyewear', tabt: 'Trail', tabk: 'Car',
     dash: 'DASH', go: 'GO!', round: 'Round', draw: 'Draw!', youWon: 'YOU WIN!', fell: 'You are out! 🌊', watching: 'Spectating', nextRound: 'You join next round',
     alive: 'Alive', connecting: 'Connecting…', waking: 'Server is waking up, up to a minute…',
     noServer: 'Server unavailable. Try later or play vs bots.', noRoom: 'Room not found', full: 'Room is full',
@@ -257,7 +257,7 @@ function connect(joinMode, code, ex) {
 
 function onRoster(m) {
   const prev = roster.size;
-  roster = new Map(m.list.map((r) => [r[0], { name: r[1], look: { c: r[2], p: r[3], h: r[4], e: r[5], t: r[6], s: r[7] }, bot: !!r[8], adm: !!r[9] }]));
+  roster = new Map(m.list.map((r) => [r[0], { name: r[1], look: { c: r[2], p: r[3], h: r[4], e: r[5], t: r[6], s: r[7], k: r[10] | 0 }, bot: !!r[8], adm: !!r[9] }]));
   hostId = m.host; cfg = { kind: m.cfg[0], len: m.cfg[1], mode: m.cfg[2], bots: m.cfg[3], chaos: m.cfg[4], diff: m.cfg[5] == null ? 1 : m.cfg[5], picks: m.cfg[6] || [] }; roomPub = !!m.pub;
   if (roster.size > prev && prev > 0 && V && V.ph === 4) GA.play('join');
   lobbySig = '';
@@ -376,9 +376,11 @@ function toast(html) {
 }
 Pro.onAch = (a) => { toast(`🏆 ${T('achUnlocked')}: <b>${lang === 'ru' ? a.ru : a.en}</b> +${a.rew} 🪙`); GA.play('ach'); refreshProfileUI(); };
 /* ================= события ================= */
-const infoOf = (id) => roster.get(id) || { name: '…', look: { c: 4, p: 0, h: 0, e: 0, t: 0, s: 0 }, bot: false };
+const infoOf = (id) => roster.get(id) || { name: '…', look: { c: 4, p: 0, h: 0, e: 0, t: 0, s: 0, k: 0 }, bot: false };
 const nameOf = (id) => infoOf(id).name;
 const ADM = '<span class="admtag">Admin</span>';
+const TAGS = { admin: ADM, absolut: '<span class="admtag tg-abs">Absolut</span>', pimba: '<span class="admtag tg-pim">PIMBA</span>' };
+const tagHtml = (t) => TAGS[t] || '';
 const colOf = (id) => { const l = infoOf(id).look; return Cos.SKIN_COL[l.s] || Cos.color(l.c); };
 const posOf = (id) => (lastMap && lastMap.get(id)) || null;
 let curMd = 0;
@@ -1004,7 +1006,7 @@ let wTab = 'c';
 function buildWardrobe() {
   refreshProfileUI();
   const tabs = $('tabs'); tabs.innerHTML = ''; $('wNote').textContent = '';
-  for (const s of ['c', 'p', 'h', 'e', 't', 's']) { const b = document.createElement('button'); b.textContent = T('tab' + s); b.className = s === wTab ? 'sel' : ''; b.onclick = () => { wTab = s; GA.play('click'); buildWardrobe(); }; tabs.appendChild(b); }
+  for (const s of ['c', 'p', 'h', 'e', 't', 's', 'k']) { const b = document.createElement('button'); b.textContent = T('tab' + s); b.className = s === wTab ? 'sel' : ''; b.onclick = () => { wTab = s; GA.play('click'); buildWardrobe(); }; tabs.appendChild(b); }
   const grid = $('grid'); grid.innerHTML = '';
   const n = Cos.count(wTab);
   // по возрастанию цены; недоступные (код/кликер) — после обычных; новые предметы за монеты 67 — в самом конце
@@ -1104,7 +1106,7 @@ function initMenu() {
     const el = $('menuAcc'); if (!el) return;
     const on = !!Pro.Acc.token;
     el.classList.toggle('hide', !on);
-    el.innerHTML = on ? `<span>👤 ${esc(Pro.Acc.name)}</span>${Pro.Acc.admin ? ADM : ''}` : '';
+    el.innerHTML = on ? `<span>👤 ${esc(Pro.Acc.name)}</span>${tagHtml(Pro.Acc.tag || (Pro.Acc.admin ? 'admin' : ''))}` : '';
   }
   window.renderMenuAcc = renderMenuAcc;
   // ---- таблица лидеров ----
@@ -1119,7 +1121,7 @@ function initMenu() {
     if (!lbData) { $('lbList').innerHTML = `<div class="lbempty">${T('accE').net}</div>`; return; }
     const rows = lbData[lbTab] || [], mine = (Pro.Acc.name || '').toLowerCase();
     if (!rows.length) { $('lbList').innerHTML = `<div class="lbempty">${T('lbEmpty')}</div>`; return; }
-    $('lbList').innerHTML = rows.map((r, i) => `<div class="lbr ${mine && r.n.toLowerCase() === mine ? 'me' : ''} ${i === 0 ? 't1' : ''}"><span class="rk">${MEDALS[i] || i + 1}</span><span class="nm">${esc(r.n)}</span>${r.a ? ADM : ''}<b>${lbTab === 'coins' ? '🪙 ' : ''}${r.v}${lbTab === 'wins' ? ' ' + T('lbWinsU') : ''}</b></div>`).join('');
+    $('lbList').innerHTML = rows.map((r, i) => `<div class="lbr ${mine && r.n.toLowerCase() === mine ? 'me' : ''} ${i === 0 ? 't1' : ''}"><span class="rk">${MEDALS[i] || i + 1}</span><span class="nm">${esc(r.n)}</span>${tagHtml(r.g || (r.a ? 'admin' : ''))}<b>${lbTab === 'coins' ? '🪙 ' : ''}${r.v}${lbTab === 'wins' ? ' ' + T('lbWinsU') : ''}</b></div>`).join('');
   }
   $('bTop').onclick = () => { GA.init(); GA.play('click'); lbTab = 'wins'; showScreen('toplist'); loadTop(); };
   $('tbWins').onclick = () => { GA.play('click'); lbTab = 'wins'; drawTop(); };
@@ -1177,5 +1179,5 @@ Promise.race([initYandex(), new Promise((r) => setTimeout(r, 4000))]).then(() =>
   requestAnimationFrame(frame);
   yReady();
 });
-window.__ps = { iv: getInputVec, get V() { return V; }, get mode() { return mode; }, get net() { return net; }, get game() { return game; }, startOffline, connect, T, get cfg() { return cfg; } };
+window.__ps = { get P() { return P; }, iv: getInputVec, get V() { return V; }, get mode() { return mode; }, get net() { return net; }, get game() { return game; }, startOffline, connect, T, get cfg() { return cfg; } };
 })();

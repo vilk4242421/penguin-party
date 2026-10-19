@@ -33,6 +33,15 @@
     ['Дымок', 'Smoke', 180], ['Рыбки', 'Fish', 260], ['Ноты', 'Notes', 240], ['Искры', 'Sparks', 320], ['Галактика', 'Galaxy', 450],
   ];
   const SKINS = [['Пингвин', 'Penguin', 0], ['Верити', 'Veriti', -1, 'code'], ['Лютиков', 'Lyutikov', -1, 'code'], ['Радужный Верити', 'Rainbow Veriti', -1, 'code'], ['Лего 67', 'Lego 67', 67000, '', 'c67']];
+  // машины для гонки: [ru, en, цена]; индекс 0 — обычный карт. Все — кабриолеты (без крыши), названия и формы придуманы
+  const CARS = [['Карт', 'Kart', 0], ['Красный Хищник', 'Red Predator', 10000], ['Жёлтый Спайдер', 'Yellow Spider', 5000], ['Синий Родстер', 'Blue Roadster', 3000], ['Белая Классика', 'White Classic', 6500], ['Зелёный Багги', 'Green Buggy', 2000]];
+  // размеры — в долях радиуса пингвина PR; hl/tl — половина длины капота/багажника
+  const CAR_SPEC = [null,
+    { col: '#8c1230', dk: '#4a0a18', L: 2.0, W: 0.95, bh: 0.4, wr: 0.42, hl: 0.55, tl: 0.3, str: '', vents: 1, seat: '#14141a', lamp: 'round' },
+    { col: '#ffcf1a', dk: '#8a6a00', L: 1.85, W: 1.0, bh: 0.3, wr: 0.4, hl: 0.3, tl: 0.5, str: '', louv: 1, seat: '#2a1a10', lamp: 'slit' },
+    { col: '#1f78e0', dk: '#0c3b78', L: 1.6, W: 0.9, bh: 0.36, wr: 0.36, hl: 0.34, tl: 0.26, str: '#ffffff', hoops: 1, seat: '#e9edf5', lamp: 'round' },
+    { col: '#f2ecdc', dk: '#a8a08a', L: 2.1, W: 0.95, bh: 0.4, wr: 0.42, hl: 0.5, tl: 0.42, str: '', fins: 1, chrome: 1, seat: '#c9222e', lamp: 'round' },
+    { col: '#3aa845', dk: '#1b5c24', L: 1.6, W: 0.95, bh: 0.32, wr: 0.56, hl: 0.26, tl: 0.2, str: '', cage: 1, lift: 0.2, seat: '#222831', lamp: 'round' }];
   const SKIN_COL = ['', '#ffd21f', '#8fc0ff', '#ff7ad9', '#2a97e0'];
   const LUT = new Image(); LUT.src = 'lutikov_f.jpg';
   const LUTB = new Image(); LUTB.src = 'lutikov_b.jpg';
@@ -44,6 +53,7 @@
     e: { list: EYES, nameIdx: 0, priceIdx: 2 },
     t: { list: TRAILS, nameIdx: 0, priceIdx: 2 },
     s: { list: SKINS, nameIdx: 0, priceIdx: 2 },
+    k: { list: CARS, nameIdx: 0, priceIdx: 2 },
   };
   const name = (slot, i, lang) => { const s = SLOTS[slot], it = s.list[i]; return lang === 'ru' ? it[s.nameIdx] : it[s.nameIdx + 1]; };
   const price = (slot, i) => { const s = SLOTS[slot]; return s.list[i][s.priceIdx]; };
@@ -669,6 +679,171 @@
   }
 
   /* ---------- миниатюры для гардероба ---------- */
+  // картинка машины сбоку (для гардероба): пингвин выглядывает из кабины
+  function drawKartSide(c, S, look) {
+    const col = SKIN_COL[look && look.s] || color((look && look.c) || 4), gy = S * 0.8, wr = S * 0.12;
+    c.save(); c.lineJoin = 'round'; c.strokeStyle = '#0a2540'; c.lineWidth = Math.max(1.5, S * 0.018);
+    c.fillStyle = 'rgba(0,30,70,.28)'; c.beginPath(); c.ellipse(S * 0.5, gy + 1, S * 0.4, S * 0.045, 0, 0, Math.PI * 2); c.fill();
+    for (const x of [S * 0.28, S * 0.72]) { c.fillStyle = '#12151d'; c.beginPath(); c.arc(x, gy - wr, wr, 0, Math.PI * 2); c.fill(); c.fillStyle = '#9aa3b2'; c.beginPath(); c.arc(x, gy - wr, wr * 0.45, 0, Math.PI * 2); c.fill(); }
+    drawPenguin(c, Object.assign({}, look, { k: 0 }), { x: S * 0.48, y: gy - wr * 1.6 + S * 0.19, u: S * 0.15, fx: 0.9, fz: 0.35, t: 1500, id: 1, noShadow: true, speed: 0, phase: 0 });
+    c.fillStyle = col; c.beginPath(); c.roundRect(S * 0.1, gy - wr * 2.3, S * 0.8, wr * 1.3, S * 0.05); c.fill(); c.stroke();
+    c.fillStyle = '#222a3c'; c.fillRect(S * 0.08, gy - wr * 3.1, S * 0.07, wr * 0.9);
+    c.restore();
+  }
+
+  // ---------- машины в профиль (гардероб): оригинальные модели, рисуются кривыми и градиентами ----------
+  // дизайн-пространство 200×100, земля на y=88, перед машины справа
+  const rgba = (h, a) => { const n = parseInt(h.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+  function carWheel(c, x, y, R, o) {
+    // тень в арке
+    c.fillStyle = '#05060a'; c.beginPath(); c.arc(x, y, R + 3.2, 0, Math.PI * 2); c.fill();
+    // шина
+    let g = c.createRadialGradient(x, y, R * 0.55, x, y, R); g.addColorStop(0, '#2b2d33'); g.addColorStop(0.55, '#111216'); g.addColorStop(1, '#050507');
+    c.fillStyle = g; c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.fill();
+    if (o.knob) { c.fillStyle = '#000'; for (let i = 0; i < 22; i++) { const a = i / 22 * Math.PI * 2; c.save(); c.translate(x + Math.cos(a) * (R - 1.2), y + Math.sin(a) * (R - 1.2)); c.rotate(a); c.fillRect(-1.6, -1.1, 3.2, 2.2); c.restore(); } }
+    if (o.white) { c.fillStyle = '#f4f1e6'; c.beginPath(); c.arc(x, y, R * 0.8, 0, Math.PI * 2); c.arc(x, y, R * 0.64, 0, Math.PI * 2, true); c.fill('evenodd'); }
+    else { c.strokeStyle = 'rgba(255,255,255,.1)'; c.lineWidth = 0.8; c.beginPath(); c.arc(x, y, R * 0.9, 0, Math.PI * 2); c.stroke(); }
+    // тормозной диск и суппорт
+    const rr = R * (o.white ? 0.62 : 0.66);
+    c.fillStyle = '#3b3e46'; c.beginPath(); c.arc(x, y, rr, 0, Math.PI * 2); c.fill();
+    if (o.caliper) { c.fillStyle = o.caliper; c.beginPath(); c.roundRect(x + rr * 0.15, y - rr * 0.78, rr * 0.5, rr * 0.55, 1.2); c.fill(); }
+    // диск
+    const rim = o.rim || '#c9ced8', n = o.spokes || 10, ri = rr * 0.97;
+    g = c.createRadialGradient(x - ri * 0.3, y - ri * 0.35, 1, x, y, ri); g.addColorStop(0, shade(rim, 0.35)); g.addColorStop(0.6, rim); g.addColorStop(1, shade(rim, -0.4));
+    c.fillStyle = g; c.beginPath(); c.arc(x, y, ri, 0, Math.PI * 2); c.fill();
+    if (!o.cap) {
+      c.fillStyle = '#16181f';
+      for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2 + (o.rot || 0), w = Math.PI / n * 0.62; c.beginPath(); c.moveTo(x + Math.cos(a - w) * ri * 0.3, y + Math.sin(a - w) * ri * 0.3); c.lineTo(x + Math.cos(a - w * 0.8) * ri * 0.9, y + Math.sin(a - w * 0.8) * ri * 0.9); c.lineTo(x + Math.cos(a + w * 0.8) * ri * 0.9, y + Math.sin(a + w * 0.8) * ri * 0.9); c.lineTo(x + Math.cos(a + w) * ri * 0.3, y + Math.sin(a + w) * ri * 0.3); c.closePath(); c.fill(); }
+    }
+    c.strokeStyle = 'rgba(0,0,0,.45)'; c.lineWidth = 0.7; c.beginPath(); c.arc(x, y, ri, 0, Math.PI * 2); c.stroke();
+    g = c.createRadialGradient(x - 1, y - 1, 0.5, x, y, R * 0.2); g.addColorStop(0, '#fff'); g.addColorStop(1, '#7c828f');
+    c.fillStyle = g; c.beginPath(); c.arc(x, y, o.cap ? R * 0.34 : R * 0.17, 0, Math.PI * 2); c.fill();
+    if (o.cap) { c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = 0.6; c.beginPath(); c.arc(x, y, R * 0.34, 0, Math.PI * 2); c.stroke(); }
+  }
+  const arch = (cx, ra, y) => `L${cx + ra} ${y} A${ra} ${ra} 0 0 0 ${cx - ra} ${y}`;
+  const CAR_PROF = [null,
+    // 1. Красный Хищник — широкий маслкар-кабриолет, двухцветная покраска
+    { R: 17, wx: [48, 146], col: '#8c1230', d: (cy, ra) => `M10 ${cy} L8 52 Q8 41 17 39 L58 37 Q66 37 70 41 L72 45 L112 45 L116 42 L120 41 Q152 40 178 47 Q192 50 194 59 L194 ${cy} ${arch(146, ra, cy)} ${arch(48, ra, cy)} Z`,
+      cab: [74, 110], dip: 45, ws: [[114, 43.5], [121, 41], [106, 24], [101, 25]], belt: [[20, 41], [70, 42], [120, 43], [176, 49]], rocker: 66,
+      extra: (c, p) => { c.fillStyle = '#0c0c10'; for (const x of [136, 152]) { c.beginPath(); c.roundRect(x, 41.2, 11, 2.4, 1); c.fill(); }
+        c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(94, 46); c.lineTo(93, 65); c.moveTo(128, 46); c.quadraticCurveTo(127, 56 , 126, 66); c.stroke();
+        c.fillStyle = '#d8dce6'; c.fillRect(100, 48, 7, 1.6); },
+      lamp: [189, 55, 'round'], tail: [9, 49, 'bar'], chrome: 0 },
+    // 2. Жёлтый Спайдер — низкий клиновидный родстер
+    { R: 15, wx: [44, 150], col: '#f0b90a', d: (cy, ra) => `M10 ${cy} L9 60 Q10 49 22 47 L56 45 Q64 45 70 49 L72 52 L112 52 L117 50 Q160 51 191 66 L196 ${cy} ${arch(150, ra, cy)} ${arch(44, ra, cy)} Z`,
+      cab: [74, 109], dip: 52, ws: [[113, 51.5], [118, 50], [105, 38], [101, 39]], belt: [[20, 49], [70, 51], [120, 52], [180, 66]], rocker: 70,
+      extra: (c, p) => { c.fillStyle = '#16120a'; c.beginPath(); c.moveTo(62, 56); c.lineTo(86, 58); c.lineTo(84, 66); c.lineTo(64, 66); c.closePath(); c.fill();
+        c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = 0.6; for (let i = 0; i < 4; i++) { c.beginPath(); c.moveTo(66 + i * 5, 57.5); c.lineTo(66 + i * 5 - 1, 65.5); c.stroke(); }
+        c.strokeStyle = 'rgba(0,0,0,.5)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(94, 53); c.lineTo(92, 69); c.moveTo(122, 52); c.lineTo(123, 70); c.stroke(); },
+      lamp: [181, 60, 'slit'], tail: [10, 53, 'bar'], rim: '#2b2d34', spokes: 5, caliper: '#e23a2e' },
+    // 3. Синий Родстер — компактный лёгкий родстер с дугами
+    { R: 14, wx: [50, 140], col: '#1768d1', d: (cy, ra) => `M16 ${cy} L14 60 Q15 51 26 50 L62 49 L72 51 L108 51 L116 47 Q150 45 172 54 Q185 58 185 66 L185 ${cy} ${arch(140, ra, cy)} ${arch(50, ra, cy)} Z`,
+      cab: [74, 106], dip: 51, ws: [[112, 49.5], [116, 47], [104, 30], [100, 31]], belt: [[22, 50], [70, 50], [120, 47], [170, 54]], rocker: 69,
+      extra: (c, p) => { c.fillStyle = 'rgba(255,255,255,.92)'; c.beginPath(); c.moveTo(18, 56); c.lineTo(150, 51); c.lineTo(180, 58.5); c.lineTo(180, 62); c.lineTo(150, 55); c.lineTo(18, 60); c.closePath(); c.fill();
+        c.strokeStyle = 'rgba(0,0,0,.5)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(88, 52); c.lineTo(87, 68); c.stroke();
+        },
+      over: (c) => { c.strokeStyle = '#dfe3ec'; c.lineWidth = 2.4; c.lineCap = 'round'; c.beginPath(); c.moveTo(78, 51); c.lineTo(73, 30); c.stroke(); c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = 0.6; c.stroke(); },
+      lamp: [178, 58, 'round'], tail: [15, 56, 'dot'], rim: '#e6e9f0', spokes: 8 },
+    // 4. Белая Классика — кабриолет 50-х с плавниками и хромом
+    { R: 17.5, wx: [44, 152], col: '#efe6cf', two: '#b3262f', d: (cy, ra) => `M8 ${cy} L8 56 Q8 48 15 47 L12 46 L7 33 Q30 38 56 47 L70 49 L72 50 L112 50 L118 47 Q156 46 184 53 Q197 56 198 65 L198 ${cy} ${arch(152, ra, cy)} ${arch(44, ra, cy)} Z`,
+      cab: [74, 110], dip: 50, ws: [[114, 49], [121, 47], [108, 28], [103, 29]], belt: [[14, 47], [70, 49], [120, 47], [184, 54]], rocker: 70,
+      extra: (c, p) => { const g = c.createLinearGradient(0, 55, 0, 63); g.addColorStop(0, '#fff'); g.addColorStop(0.5, '#aeb6c4'); g.addColorStop(1, '#eef1f6');
+        c.strokeStyle = g; c.lineWidth = 2.2; c.beginPath(); c.moveTo(60, 61); c.quadraticCurveTo(112, 54, 188, 60); c.stroke();
+        c.fillStyle = g; c.fillRect(2, 62, 12, 3.2); c.fillRect(190, 62, 10, 3.2);
+        c.strokeStyle = 'rgba(0,0,0,.4)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(94, 51); c.lineTo(93, 68); c.stroke(); },
+      lamp: [192, 57, 'chrome'], tail: [8, 54, 'fin'], white: 1, cap: 1, chrome: 1 },
+    // 5. Зелёный Багги — высокий внедорожник с каркасом
+    { R: 24, wx: [48, 146], col: '#2f9e44', d: (cy, ra) => `M18 ${cy} L16 48 Q16 41 24 41 L60 41 L63 45 L110 45 L114 42 L120 41 L170 41 Q181 42 183 52 L184 ${cy} ${arch(146, ra, cy)} ${arch(48, ra, cy)} Z`,
+      cab: [66, 108], dip: 45, ws: [[112, 44], [118, 41], [114, 29], [110, 29]], belt: [[24, 42], [70, 45], [120, 42], [176, 43]], rocker: 62,
+      extra: (c, p) => { c.strokeStyle = 'rgba(0,0,0,.45)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(88, 46); c.lineTo(88, 62); c.stroke();
+        c.fillStyle = '#1c2a20'; c.fillRect(172, 56, 8, 5);
+        c.fillStyle = '#1c2a20'; c.fillRect(172, 56, 8, 5); },
+      over: (c) => { c.strokeStyle = '#22262e'; c.lineWidth = 2.4; c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath(); c.moveTo(64, 45); c.lineTo(68, 14); c.lineTo(112, 14); c.lineTo(114, 30); c.moveTo(68, 14); c.lineTo(36, 41); c.moveTo(90, 14); c.lineTo(90, 45); c.stroke();
+        c.fillStyle = '#fffbd0'; for (const x of [78, 88, 98, 108]) { c.beginPath(); c.arc(x, 11.5, 2.3, 0, Math.PI * 2); c.fill(); } },
+      lamp: [178, 47, 'round'], tail: [17, 46, 'dot'], knob: 1, rim: '#9aa3b2', spokes: 6, cap: 0 }];
+
+  function drawCarSide(c, size, k, look) {
+    const S = size, pf = CAR_PROF[k], sp = CAR_SPEC[k];
+    if (!pf) return;
+    const K = S / 205, ox = S * 0.012, gyD = 88, oy = S * 0.8 - gyD * K;
+    const cyW = gyD - pf.R, ra = pf.R + 3.5;
+    c.save(); c.translate(ox, oy); c.scale(K, K); c.lineJoin = 'round';
+    // тень на льду и отражение
+    let g = c.createRadialGradient(100, gyD + 2, 5, 100, gyD + 2, 100); g.addColorStop(0, 'rgba(0,25,60,.55)'); g.addColorStop(1, 'rgba(0,25,60,0)');
+    c.save(); c.translate(100, gyD + 2); c.scale(1, 0.1); c.translate(-100, -(gyD + 2)); c.fillStyle = g; c.beginPath(); c.arc(100, gyD + 2, 100, 0, Math.PI * 2); c.fill(); c.restore();
+    // салон
+    const cx0 = pf.cab[0], cx1 = pf.cab[1], dip = pf.dip;
+    c.fillStyle = '#17181e'; c.fillRect(cx0 - 4, dip - 14, cx1 - cx0 + 8, 20);
+    g = c.createLinearGradient(0, dip - 14, 0, dip + 6); g.addColorStop(0, sp.seat === '#14141a' ? '#2a2b33' : sp.seat); g.addColorStop(1, '#0b0b0f');
+    c.fillStyle = g; c.beginPath(); c.roundRect(cx0 - 3, dip - 12, 10, 18, 3); c.fill();        // спинка сиденья
+    // колёса
+    const wo = { rim: pf.rim, spokes: pf.spokes, caliper: pf.caliper, white: pf.white, cap: pf.cap, knob: pf.knob };
+    for (const wx of pf.wx) carWheel(c, wx, cyW, pf.R, wo);
+    // пингвин (внутри салона, ниже кромки закрывается корпусом)
+    c.save(); c.beginPath(); c.rect(0, -60, 220, dip + 60); c.clip();
+    c.restore();
+    c.restore();
+    c.save(); c.beginPath(); c.rect(0, 0, S, oy + dip * K + 1); c.clip();
+    const lk = Object.assign({}, look); lk.k = 0;
+    drawPenguin(c, lk, { x: ox + ((cx0 + cx1) / 2) * K, y: oy + (dip + 8) * K, u: S * 0.092, fx: 0.9, fz: 0.35, t: 1500, id: 1, noShadow: true, speed: 0, phase: 0 });
+    c.restore();
+    c.save(); c.translate(ox, oy); c.scale(K, K); c.lineJoin = 'round';
+    // корпус
+    const body = new Path2D(pf.d(cyW, ra));
+    const top = Math.min(...pf.belt.map((q) => q[1])) - 8;
+    g = c.createLinearGradient(0, top, 0, gyD); const col = sp.col;
+    g.addColorStop(0, shade(col, 0.42)); g.addColorStop(0.16, shade(col, 0.16)); g.addColorStop(0.5, col); g.addColorStop(0.84, shade(col, -0.32)); g.addColorStop(1, shade(col, -0.55));
+    c.fillStyle = g; c.fill(body);
+    c.save(); c.clip(body);
+    if (pf.two) {  // нижняя часть другого цвета / тёмная полоса
+      const lowY = (pf.belt[1][1] + cyW) / 2 + (pf.stripe ? -3 : 1);
+      const g2 = c.createLinearGradient(0, lowY, 0, gyD);
+      if (pf.stripe) { // тёмная «плечевая» полоса вдоль борта
+        const gg = c.createLinearGradient(0, top, 0, top + 30); gg.addColorStop(0, 'rgba(34,32,38,.0)'); gg.addColorStop(0.2, 'rgba(34,32,38,.95)'); gg.addColorStop(1, 'rgba(24,22,28,.95)');
+        c.fillStyle = gg; c.beginPath(); c.moveTo(14, 42); c.lineTo(70, 42.5); c.lineTo(122, 43.5); c.quadraticCurveTo(160, 41.5, 190, 51); c.lineTo(196, 56); c.lineTo(150, 54); c.lineTo(128, 52); c.quadraticCurveTo(100, 58, 70, 54); c.lineTo(12, 56); c.closePath(); c.fill();
+      } else {
+        g2.addColorStop(0, shade(pf.two, 0.18)); g2.addColorStop(1, shade(pf.two, -0.4)); c.fillStyle = g2;
+        c.beginPath(); c.moveTo(0, 58); c.quadraticCurveTo(110, 51, 200, 58); c.lineTo(200, 100); c.lineTo(0, 100); c.closePath(); c.fill();
+      }
+    }
+    // блики: отражение неба вдоль плеча, нижняя тень, затемнение арок
+    const sh = c.createLinearGradient(8, 0, 196, 0);
+    sh.addColorStop(0, 'rgba(255,255,255,0)'); sh.addColorStop(0.18, 'rgba(255,255,255,.55)'); sh.addColorStop(0.4, 'rgba(255,255,255,.12)'); sh.addColorStop(0.7, 'rgba(255,255,255,.5)'); sh.addColorStop(1, 'rgba(255,255,255,0)');
+    c.strokeStyle = sh; c.lineWidth = 1.6; c.lineCap = 'round'; c.beginPath(); pf.belt.forEach((q, i) => (i ? c.lineTo(q[0], q[1] + 3.6) : c.moveTo(q[0], q[1] + 3.6))); c.stroke();
+    c.lineWidth = 0.7; c.globalAlpha = 0.55; c.beginPath(); pf.belt.forEach((q, i) => (i ? c.lineTo(q[0], q[1] + 7.5) : c.moveTo(q[0], q[1] + 7.5))); c.stroke(); c.globalAlpha = 1;
+    const ao = c.createLinearGradient(0, pf.rocker - 8, 0, cyW + 2); ao.addColorStop(0, 'rgba(0,0,0,0)'); ao.addColorStop(1, 'rgba(0,0,0,.5)'); c.fillStyle = ao; c.fillRect(0, pf.rocker - 8, 210, 30);
+    for (const wx of pf.wx) { const rg = c.createRadialGradient(wx, cyW, ra, wx, cyW, ra + 9); rg.addColorStop(0, 'rgba(0,0,0,.5)'); rg.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = rg; c.fillRect(wx - ra - 10, cyW - ra - 10, 2 * ra + 20, ra + 10); }
+    if (pf.extra) pf.extra(c, pf);
+    c.restore();
+    c.strokeStyle = 'rgba(8,10,16,.7)'; c.lineWidth = 0.8; c.stroke(body);
+    // фара и стоп
+    const [lx, ly, lt] = pf.lamp;
+    if (lt === 'slit') { g = c.createLinearGradient(lx - 8, ly, lx + 4, ly); g.addColorStop(0, '#9fd2ff'); g.addColorStop(1, '#fff'); c.fillStyle = '#0c0d12'; c.beginPath(); c.moveTo(lx - 9, ly + 2); c.lineTo(lx + 5, ly - 3); c.lineTo(lx + 6, ly - 0.5); c.lineTo(lx - 7, ly + 4.5); c.closePath(); c.fill(); c.fillStyle = g; c.beginPath(); c.moveTo(lx - 7, ly + 2); c.lineTo(lx + 4, ly - 1.8); c.lineTo(lx + 4.6, ly - 0.4); c.lineTo(lx - 6, ly + 3.2); c.closePath(); c.fill(); }
+    else {
+      const lr = lt === 'chrome' ? 4.6 : 4.2;
+      if (lt === 'chrome') { g = c.createLinearGradient(0, ly - lr - 1.6, 0, ly + lr + 1.6); g.addColorStop(0, '#fff'); g.addColorStop(0.5, '#9aa3b2'); g.addColorStop(1, '#eef1f6'); c.fillStyle = g; c.beginPath(); c.arc(lx, ly, lr + 1.7, 0, Math.PI * 2); c.fill(); }
+      else { c.fillStyle = '#0c0d12'; c.beginPath(); c.arc(lx, ly, lr + 1.4, 0, Math.PI * 2); c.fill(); }
+      g = c.createRadialGradient(lx - 1, ly - 1, 0.5, lx, ly, lr); g.addColorStop(0, '#fff'); g.addColorStop(0.45, '#d8ecff'); g.addColorStop(1, '#6aa4e0');
+      c.fillStyle = g; c.beginPath(); c.arc(lx, ly, lr, 0, Math.PI * 2); c.fill();
+      if (k === 1) { c.strokeStyle = 'rgba(190,225,255,.95)'; c.lineWidth = 0.9; c.beginPath(); c.arc(lx, ly, lr * 0.62, 0, Math.PI * 2); c.stroke(); }
+    }
+    c.save(); c.globalCompositeOperation = 'lighter'; g = c.createRadialGradient(lx, ly, 1, lx, ly, 13); g.addColorStop(0, 'rgba(200,225,255,.35)'); g.addColorStop(1, 'rgba(200,225,255,0)'); c.fillStyle = g; c.beginPath(); c.arc(lx, ly, 13, 0, Math.PI * 2); c.fill(); c.restore();
+    const [tx, ty, tt] = pf.tail;
+    g = c.createLinearGradient(tx - 2, 0, tx + 5, 0); g.addColorStop(0, '#ff5a4a'); g.addColorStop(1, '#a00f18'); c.fillStyle = g;
+    if (tt === 'bar') { c.beginPath(); c.roundRect(tx - 1.5, ty - 1.6, 5, 7, 1.2); c.fill(); }
+    else if (tt === 'fin') { c.beginPath(); c.moveTo(tx - 1, ty - 7); c.lineTo(tx + 3, ty - 7); c.lineTo(tx + 3.5, ty + 3); c.lineTo(tx - 1, ty + 3); c.closePath(); c.fill(); }
+    else { c.beginPath(); c.arc(tx + 1, ty, 2.8, 0, Math.PI * 2); c.fill(); }
+    // лобовое стекло и рамка
+    const w = pf.ws; g = c.createLinearGradient(w[3][0], w[3][1], w[0][0], w[0][1]); g.addColorStop(0, 'rgba(245,252,255,.85)'); g.addColorStop(0.5, 'rgba(160,210,240,.55)'); g.addColorStop(1, 'rgba(70,120,170,.65)');
+    c.fillStyle = g; c.beginPath(); c.moveTo(w[0][0], w[0][1]); c.lineTo(w[1][0], w[1][1]); c.lineTo(w[2][0], w[2][1]); c.lineTo(w[3][0], w[3][1]); c.closePath(); c.fill();
+    c.strokeStyle = pf.chrome ? '#e8ecf2' : '#1a1c23'; c.lineWidth = 1.5; c.lineCap = 'round'; c.beginPath(); c.moveTo(w[1][0], w[1][1]); c.lineTo(w[2][0], w[2][1]); c.lineTo(w[3][0], w[3][1]); c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(w[0][0] - 1, w[0][1] - 1); c.lineTo(w[3][0] + 1.5, w[3][1] + 1.2); c.stroke();
+    // зеркало
+    c.fillStyle = shade(col, 0.1); c.strokeStyle = 'rgba(8,10,16,.7)'; c.lineWidth = 0.6; c.beginPath(); c.roundRect(w[0][0] - 4, w[0][1] - 5.5, 6.5, 4, 1.6); c.fill(); c.stroke();
+    if (pf.over) pf.over(c);
+    c.restore();
+  }
+
   function thumb(slot, i, look, size, lang) {
     const cv = document.createElement('canvas'); const D = Math.min(window.devicePixelRatio || 1, 2);
     cv.width = cv.height = Math.round(size * D); cv.style.width = cv.style.height = size + 'px';
@@ -677,6 +852,10 @@
       c.font = Math.round(size * 0.55) + 'px serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
       c.fillText(['🚫', '❄️', '💖', '⭐', '🔥', '🌈', '🫧', '🎊', '⚡', '🍃', '🌸', '💨', '🐟', '🎵', '✨', '🌌'][i], size / 2, size / 2 + 2);
       return cv;
+    }
+    if (slot === 'k') {
+      const c0 = c; if (i === 0) { drawKartSide(c0, size, look); return cv; }
+      drawCarSide(c0, size, i, Object.assign({ c: 4, p: 0, h: 0, e: 0, t: 0, s: 0 }, look)); return cv;
     }
     const l = Object.assign({ c: 4, p: 0, h: 0, e: 0, t: 0, s: 0 }, look); l[slot] = i;
     if (slot === 'c' || slot === 'p') { l.h = 0; l.e = 0; }
@@ -688,5 +867,5 @@
     return cv;
   }
 
-  root.Cosmetics = { SKIN_COL, SLOTS, COLORS, name, price, cur, lock, count, color, drawPenguin, thumb, shade, lum, star, heart, ell, circ };
+  root.Cosmetics = { CAR_SPEC, SKIN_COL, SLOTS, COLORS, name, price, cur, lock, count, color, drawPenguin, thumb, shade, lum, star, heart, ell, circ };
 })(window);

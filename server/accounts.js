@@ -54,6 +54,8 @@ function getStore() {
 }
 
 /* ---------- утилиты ---------- */
+const nickList = (v) => String(v || '').split(',').map((x) => String(x || '').trim().toLowerCase()).filter(Boolean);
+const TAG_ABSOLUT = nickList(process.env.TAG_ABSOLUT), TAG_PIMBA = nickList(process.env.TAG_PIMBA);
 const ADMINS = String(process.env.ADMINS || '').split(',').map((x) => String(x || '').trim().toLowerCase()).filter(Boolean);
 
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
@@ -91,15 +93,15 @@ function sanitize(acc, p, now) {
     if (p.xp - old.xp > xAllow) return 'xp';
     let added = 0; for (const s of Object.keys(p.owned || {})) added += arr(p.owned[s]).filter((v) => !arr(old.owned && old.owned[s]).includes(v)).length;
     if (added > MAX_NEW_ITEMS) return 'items';
-  } else if (p.coins > 60000 || p.xp > 400000 || p.c67 > 130000) return 'coins'; // первый профиль (перенос с устройства)
+  } else if (p.coins > 160000 || p.xp > 400000 || p.c67 > 130000) return 'coins'; // первый профиль (перенос с устройства)
   return null;
 }
 
 /* ---------- секретные коды (хэши только здесь) ---------- */
 const normC = (t) => String(t || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
 const fnvC = (t) => { let h = 0x811c9dc5; for (const ch of t) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16); };
-const CODE_IDS = { '12809762': 'veriti', 'bc164324': 'lutikov', '257bb5e5': 'rbveriti', 'd83f00d2': 'rybkisbest', '31f8c03b': 'komarov' };
-const COIN_CODES = { rybkisbest: 10000 }, C67_CODES = { komarov: 67000 };
+const CODE_IDS = { '12809762': 'veriti', 'bc164324': 'lutikov', '257bb5e5': 'rbveriti', 'd83f00d2': 'rybkisbest', '31f8c03b': 'komarov', '8ad72262': 'rybkiskrasavchik' };
+const COIN_CODES = { rybkisbest: 10000, rybkiskrasavchik: 100000 }, C67_CODES = { komarov: 67000 };
 const codeId = (c) => CODE_IDS[fnvC(normC(c))] || null;
 
 /* ---------- API ---------- */
@@ -127,7 +129,7 @@ async function handle(req, res, url, send) {
     const salt = crypto.randomBytes(16).toString('hex'), token = newToken(), rec = newRecovery();
     const acc = { name, salt, hash: hashPass(pw, salt), rec: sha(rec.replace(/-/g, '')), tokens: [sha(token)], profile: null, t: Date.now(), made: Date.now(), bonusC: 0 };
     await st.set(keyOf(name), acc); console.log('[acc] register: создан', keyOf(name), 'store=' + st.kind);
-    return send(200, { ok: true, token, name, recovery: rec, profile: null, admin: ADMINS.includes(keyOf(name)), nAdm: ADMINS.length });
+    return send(200, { ok: true, token, name, recovery: rec, profile: null, admin: ADMINS.includes(keyOf(name)), tag: tagOf(keyOf(name)), nAdm: ADMINS.length });
   }
   if (url === '/api/login' && req.method === 'POST') {
     const name = String(body.name || '').trim(), k = keyOf(name);
@@ -136,7 +138,7 @@ async function handle(req, res, url, send) {
     if (!acc || !eq(hashPass(String(body.pass || ''), acc.salt), acc.hash)) { console.log('[acc] login: отказ', JSON.stringify(k), acc ? 'аккаунт есть, пароль не подошёл' : 'аккаунта с таким ником нет'); return send(200, { ok: false, e: 'creds' }); }
     console.log('[acc] login: ок', k);
     const token = newToken(); acc.tokens = arr(acc.tokens).slice(-7).concat(sha(token)); await st.set(k, acc);
-    return send(200, { ok: true, token, name: acc.name, profile: acc.profile, admin: ADMINS.includes(k), nAdm: ADMINS.length });
+    return send(200, { ok: true, token, name: acc.name, profile: acc.profile, admin: ADMINS.includes(k), tag: tagOf(k), nAdm: ADMINS.length });
   }
   if (url === '/api/reset' && req.method === 'POST') {
     const k = keyOf(body.name);
@@ -153,7 +155,7 @@ async function handle(req, res, url, send) {
   if (tk) { k = keyOf(safeDec(req.headers['x-account'] || '')); acc = k ? await st.get(k) : null; if (acc && !arr(acc.tokens).includes(sha(tk))) acc = null; }
   if (!acc) { console.log('[acc] 401', JSON.stringify(k), tk ? 'токен не подошёл или нет аккаунта' : 'нет токена'); return send(401, { ok: false, e: 'auth' }); }
 
-  if (url === '/api/profile' && req.method === 'GET') return send(200, { ok: true, name: acc.name, profile: acc.profile, v: acc.v || 0, admin: ADMINS.includes(k), nAdm: ADMINS.length });
+  if (url === '/api/profile' && req.method === 'GET') return send(200, { ok: true, name: acc.name, profile: acc.profile, v: acc.v || 0, admin: ADMINS.includes(k), tag: tagOf(k), nAdm: ADMINS.length });
   if (url === '/api/profile' && req.method === 'PUT') {
     if (limited('put:' + k, 60, 60 * 1000)) return send(429, { ok: false, e: 'wait' });
     const p = body.profile, why = sanitize(acc, p, Date.now());
@@ -183,6 +185,7 @@ async function verify(accIn) { // подтверждённый вход: { k, na
   } catch (e) { return null; }
 }
 const isAdminKey = (k) => ADMINS.includes(k);
+function tagOf(k) { return ADMINS.includes(k) ? 'admin' : TAG_ABSOLUT.includes(k) ? 'absolut' : TAG_PIMBA.includes(k) ? 'pimba' : ''; }
 async function isAdmin(accIn) { const v = await verify(accIn); return !!(v && isAdminKey(v.k)); }
 // победа в матче с живыми игроками
 async function addWin(k) {
@@ -192,7 +195,7 @@ const topCache = new Map();
 async function topList(kind) {
   const c = topCache.get(kind); if (c && Date.now() - c.t < 20000) return c.v;
   const rows = await getStore().top(kind, 50);
-  const v = rows.map((r) => ({ n: r.n, v: r.v, a: isAdminKey(r.k) ? 1 : 0 }));
+  const v = rows.map((r) => ({ n: r.n, v: r.v, a: isAdminKey(r.k) ? 1 : 0, g: tagOf(r.k) }));
   topCache.set(kind, { t: Date.now(), v }); return v;
 }
 /* Аварийный сброс: переменная RESET_PASS=ник:новыйпароль — при запуске задаёт пароль аккаунту (или создаёт его). После входа УДАЛИ переменную. */

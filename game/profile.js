@@ -6,8 +6,8 @@
 
   const DEF = () => ({
     name: '', coins: 0, c67: 0, xp: 0,
-    look: { c: 4, p: 0, h: 0, e: 0, t: 0, s: 0 },
-    owned: { c: [], p: [], h: [], e: [], t: [], s: [] },
+    look: { c: 4, p: 0, h: 0, e: 0, t: 0, s: 0, k: 0 },
+    owned: { c: [], p: [], h: [], e: [], t: [], s: [], k: [] },
     stats: { ko: 0, roundWins: 0, matchWins: 0, matches: 0, dashes: 0, picks: 0, falls: 0, bestKoRound: 0, friendMatches: 0, tours: 0, tourWins: 0, modeMask: 0, taps: 0, podium: 0 },
     ach: {}, lastDaily: '',
     clk: { fish: 0, total: 0, lp: 0, la: 0, done: 0, seen: 0 },
@@ -38,7 +38,7 @@
   const norm = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
   const fnv = (s) => { let h = 0x811c9dc5; for (const ch of s) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16); };
   // награды за коды; сами коды проверяет сервер (POST /api/code), здесь их нет
-  const REWARDS = { veriti: { slot: 's', idx: 1 }, lutikov: { slot: 's', idx: 2 }, rbveriti: { slot: 's', idx: 3 }, rybkisbest: { coins: 10000 }, komarov: { c67: 67000 } };
+  const REWARDS = { veriti: { slot: 's', idx: 1 }, lutikov: { slot: 's', idx: 2 }, rbveriti: { slot: 's', idx: 3 }, rybkisbest: { coins: 10000 }, rybkiskrasavchik: { coins: 100000 }, komarov: { c67: 67000 } };
 
   // приводит произвольный объект профиля к полному виду (новые поля, бесплатные предметы, экипировка)
   function normalize(o) {
@@ -136,7 +136,7 @@
 
   /* ---------- коды ---------- */
   /* ---------- аккаунт: профиль на сервере ---------- */
-  const Acc = { token: '', name: '', v: 0, state: '', admin: null, nAdm: 0, onChange: null };
+  const Acc = { token: '', name: '', v: 0, state: '', admin: null, tag: '', nAdm: 0, onChange: null };
   try { const s = JSON.parse(localStorage.getItem('ps_acc') || 'null'); if (s && s.token) { Acc.token = s.token; Acc.name = s.name; Acc.v = s.v || 0; } } catch (e) {}
   const saveAcc = () => { try { if (Acc.token) localStorage.setItem('ps_acc', JSON.stringify({ token: Acc.token, name: Acc.name, v: Acc.v })); else localStorage.removeItem('ps_acc'); } catch (e) {} };
   const note = (s) => { Acc.state = s; if (Acc.onChange) Acc.onChange(s); };
@@ -169,7 +169,7 @@
   async function authFlow(pathS, body) {
     let r; try { r = await api(pathS, 'POST', body); } catch (e) { return { ok: false, e: 'net' }; }
     if (!r.ok) return { ok: false, e: r.status === 429 ? 'wait' : r.e || 'err' };
-    Acc.token = r.token; Acc.name = r.name; Acc.v = 0; Acc.admin = !!r.admin; Acc.nAdm = r.nAdm | 0; saveAcc();
+    Acc.token = r.token; Acc.name = r.name; Acc.v = 0; Acc.admin = !!r.admin; Acc.tag = r.tag || (r.admin ? 'admin' : ''); Acc.nAdm = r.nAdm | 0; saveAcc();
     if (r.profile) { adopt(r.profile); try { const g = await api('/api/profile', 'GET'); Acc.v = g.v || 0; saveAcc(); } catch (e) {} }
     else { dirty = true; await syncNow(); } // новый аккаунт: переносим профиль с этого устройства
     note('ok'); return { ok: true, recovery: r.recovery, fresh: !r.profile };
@@ -177,8 +177,8 @@
   const register = (name, pass) => authFlow('/api/register', { name, pass });
   const login = (name, pass) => authFlow('/api/login', { name, pass });
   const resetPass = (name, recovery, pass) => authFlow('/api/reset', { name, recovery, pass });
-  async function checkAcc() { if (!Acc.token) return; try { const g = await api('/api/profile', 'GET'); if (g.status === 401) { Acc.token = ''; saveAcc(); note('expired'); } else if (g.ok) { Acc.admin = !!g.admin; Acc.nAdm = g.nAdm | 0; note(Acc.state || 'ok'); } } catch (e) {} }
-  async function logout() { try { await api('/api/logout', 'POST'); } catch (e) {} Acc.token = ''; Acc.name = ''; Acc.v = 0; Acc.admin = null; saveAcc(); note(''); }
+  async function checkAcc() { if (!Acc.token) return; try { const g = await api('/api/profile', 'GET'); if (g.status === 401) { Acc.token = ''; saveAcc(); note('expired'); } else if (g.ok) { Acc.admin = !!g.admin; Acc.tag = g.tag || (g.admin ? 'admin' : ''); Acc.nAdm = g.nAdm | 0; note(Acc.state || 'ok'); } } catch (e) {} }
+  async function logout() { try { await api('/api/logout', 'POST'); } catch (e) {} Acc.token = ''; Acc.name = ''; Acc.v = 0; Acc.admin = null; Acc.tag = ''; saveAcc(); note(''); }
   if (root.addEventListener) {
     root.addEventListener('pagehide', () => { if (Acc.token && dirty) syncNow(true); });
     root.addEventListener('visibilitychange', () => { if (document.hidden && Acc.token && dirty) syncNow(true); });

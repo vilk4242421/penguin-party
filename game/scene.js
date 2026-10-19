@@ -655,6 +655,82 @@
     return [sx, sy, u * sc, lift];
   }
 
+
+  // машина-кабриолет вместо карта: собирается из боксов, пингвин сидит в открытой кабине
+  function drawCar(ctx, cam, p, t, sp) {
+    const PR = Sim.C.PR * 1.32;
+    const S = cam.S, a = p.face, cr = Math.cos(a), sr = Math.sin(a), rot = a;
+    const L = PR * sp.L, Wd = PR * sp.W, wr = PR * sp.wr, lift = PR * (sp.lift || 0);
+    const bh = PR * sp.bh, z0 = wr * 0.55 + lift, top = z0 + bh, hl = PR * sp.hl, tl = PR * sp.tl;
+    const dark = '#161a26', edge = '#0a2540', glass = 'rgba(175,225,255,.36)';
+    const W = (lx, ly) => [p.x + cr * lx - sr * ly, p.y + sr * lx + cr * ly];   // локальные -> мировые
+    const wy = (lx, ly) => W(lx, ly)[1];
+    const box = (lx, ly, zz, hx, hy, hz, col, ed) => { const [x, y] = W(lx, ly); drawBox(ctx, cam, x, y, zz, hx, hy, hz, rot, col, ed === undefined ? edge : ed); };
+    const flat = (zz, fn) => ground(ctx, cam, () => { ctx.save(); ctx.translate(p.x, p.y + zoff(cam, zz)); ctx.rotate(rot); fn(); ctx.restore(); });
+    const cl = L - hl - tl, cx = (tl - hl) * 1;                      // кабина: центр и полудлина (вдоль машины)
+    // колёса
+    const wh = [];
+    for (const lx of [-0.62 * L, 0.62 * L]) for (const sd of [-1, 1]) wh.push({ lx, ly: sd * (Wd + PR * 0.04), y: wy(lx, sd * (Wd + PR * 0.04)) });
+    wh.sort((m, n) => m.y - n.y);
+    const drawWheel = (w) => { box(w.lx, w.ly, 0, wr * 1.0, PR * 0.2, wr * 2.0, '#12151d', '#000'); box(w.lx, w.ly + Math.sign(w.ly) * 0.01, wr * 0.55, wr * 0.45, PR * 0.205, wr * 0.9, sp.chrome ? '#e8ecf2' : '#8d96a6', null); };
+    drawWheel(wh[0]); drawWheel(wh[1]);
+    // корпус
+    box(0, 0, z0, L, Wd, bh, sp.col);
+    if (sp.chrome) { box(L + PR * 0.05, 0, z0 + bh * 0.1, PR * 0.07, Wd * 0.96, bh * 0.45, '#dfe5ee'); box(-L - PR * 0.05, 0, z0 + bh * 0.1, PR * 0.07, Wd * 0.96, bh * 0.45, '#dfe5ee'); }
+    else { box(L + PR * 0.04, 0, z0, PR * 0.06, Wd * 0.92, bh * 0.4, dark, null); }
+    // капот и багажник чуть выше корпуса
+    box(L - hl, 0, top, hl, Wd * 0.98, PR * 0.05, sp.col);
+    box(-L + tl, 0, top, tl, Wd * 0.98, PR * (sp.fins ? 0.08 : 0.06), sp.col);
+    // полосы, воздухозаборники, жалюзи
+    if (sp.str) flat(top + PR * 0.1, () => { ctx.fillStyle = sp.str; for (const sy of [-1, 1]) { ctx.fillRect(L - 2 * hl, sy * Wd * 0.22 - Wd * 0.07, 2 * hl, Wd * 0.14); ctx.fillRect(-L, sy * Wd * 0.22 - Wd * 0.07, 2 * tl, Wd * 0.14); } });
+    if (sp.vents) flat(top + PR * 0.1, () => { ctx.fillStyle = '#0c0d12'; for (const sy of [-1, 1]) { ctx.beginPath(); ctx.roundRect(L - 1.7 * hl, sy * Wd * 0.45 - Wd * 0.12, hl * 1.1, Wd * 0.24, 4); ctx.fill(); } });
+    if (sp.louv) flat(top + PR * 0.15, () => { ctx.fillStyle = sp.dk; ctx.fillRect(-L + tl * 0.2, -Wd * 0.6, tl * 1.6, Wd * 1.2); ctx.fillStyle = '#ffe36b'; for (let i = 0; i < 5; i++) ctx.fillRect(-L + tl * 0.28 + i * tl * 0.32, -Wd * 0.55, tl * 0.12, Wd * 1.1); });
+    // глянцевые блики на капоте и багажнике
+    flat(top + PR * 0.16, () => { const sg = ctx.createLinearGradient(0, -Wd, 0, Wd); sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(0.3, 'rgba(255,255,255,.34)'); sg.addColorStop(0.5, 'rgba(255,255,255,.05)'); sg.addColorStop(1, 'rgba(0,0,0,.12)'); ctx.fillStyle = sg; ctx.fillRect(L - 2 * hl, -Wd * 0.9, 2 * hl, Wd * 1.8); ctx.fillRect(-L, -Wd * 0.9, 2 * tl, Wd * 1.8); });
+    // фары и стопы
+    const lampCol = '#fffbd0';
+    for (const sd of [-1, 1]) {
+      if (sp.lamp === 'slit') box(L + PR * 0.02, sd * Wd * 0.5, top - PR * 0.06, PR * 0.05, Wd * 0.3, PR * 0.08, lampCol, null);
+      else box(L + PR * 0.03, sd * Wd * 0.68, top - PR * 0.16, PR * 0.06, PR * 0.15, PR * 0.15, lampCol, null);
+      box(-L - PR * 0.01, sd * Wd * 0.7, top - PR * 0.12, PR * 0.04, PR * 0.18, PR * 0.1, '#ff3b30', null);
+    }
+    // плавники у классики
+    const pre = [], post = [];
+    const put = (lx, ly, fn) => (wy(lx, ly) <= p.y + 0.01 ? pre : post).push(fn);
+    if (sp.fins) for (const sd of [-1, 1]) put(-L + PR * 0.25, sd * (Wd - PR * 0.08), () => box(-L + PR * 0.25, sd * (Wd - PR * 0.08), top, PR * 0.4, PR * 0.06, PR * 0.4, sp.col));
+    // кабина: тёмный пол, борта, лобовое стекло, дуги
+    flat(top, () => { ctx.fillStyle = sp.seat; ctx.fillRect(cx - cl, -Wd * 0.8, 2 * cl, Wd * 1.6); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(cx - cl, -Wd * 0.8, 2 * cl, Wd * 1.6); });
+    const wallZ = top, wallH = PR * 0.2;
+    for (const sd of [-1, 1]) put(cx, sd * Wd * 0.86, () => box(cx, sd * Wd * 0.86, wallZ, cl, PR * 0.08, wallH, sp.col));
+    put(cx - cl, 0, () => box(cx - cl, 0, wallZ, PR * 0.1, Wd * 0.86, wallH + PR * 0.12, sp.seat === '#14141a' ? '#23232c' : sp.seat));   // спинка
+    put(cx + cl, 0, () => box(cx + cl, 0, wallZ, PR * 0.1, Wd * 0.86, wallH, sp.col));                                                    // панель
+    // лобовое стекло
+    const gx = cx + cl * 0.88, gH = PR * (sp.cage ? 0.5 : 0.62);
+    put(gx, 0, () => {
+      const q = (lx, ly, zz) => { const [x, y] = W(lx, ly); return pr(cam, x, y, zz); };
+      const pts = [q(gx, -Wd * 0.84, wallZ + wallH), q(gx, Wd * 0.84, wallZ + wallH), q(gx - PR * 0.22, Wd * 0.8, wallZ + wallH + gH), q(gx - PR * 0.22, -Wd * 0.8, wallZ + wallH + gH)];
+      ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < 4; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath();
+      ctx.fillStyle = glass; ctx.fill(); ctx.strokeStyle = 'rgba(230,245,255,.9)'; ctx.lineWidth = Math.max(1.5, S * PR * 0.06); ctx.stroke();
+    });
+    if (sp.cage || sp.hoops) {
+      const hc = sp.cage ? '#222831' : '#e9edf5', hH = PR * (sp.cage ? 1.25 : 0.95), bx = cx - cl * 0.55;
+      for (const sd of [-1, 1]) put(bx, sd * Wd * 0.84, () => box(bx, sd * Wd * 0.84, wallZ, PR * 0.06, PR * 0.06, hH, hc, null));
+      put(bx, 0, () => box(bx, 0, wallZ + hH - PR * 0.06, PR * 0.06, Wd * 0.86, PR * 0.07, hc, null));
+      if (sp.cage) for (const sd of [-1, 1]) put(cx, sd * Wd * 0.84, () => box(cx + cl * 0.1, sd * Wd * 0.84, wallZ + hH - PR * 0.06, cl * 0.9, PR * 0.05, PR * 0.07, hc, null));
+    }
+    pre.forEach((f) => f());
+    // пингвин
+    const [csx, csy] = pr(cam, W(cx, 0)[0], W(cx, 0)[1], wallZ), u = uOf(cam);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(csx - 4 * PR * S, csy - 7 * PR * S, 8 * PR * S, 7 * PR * S + PR * 0.3 * S * cam.K);
+    ctx.clip();
+    const fx = Math.cos(p.face), fz = Math.sin(p.face);
+    Cos.drawPenguin(ctx, p.look, { x: csx, y: csy + PR * 0.42 * S * cam.K, u: u * 0.78, fx, fz, t: t * 1000, id: p.id, speed: 0, phase: 0, boost: false, noShadow: true, cheer: p.fin === 1, alpha: 1 });
+    ctx.restore();
+    post.forEach((f) => f());
+    drawWheel(wh[2]); drawWheel(wh[3]);
+  }
+
   function drawKart(ctx, cam, p, t) {
     const S = cam.S, col = (Cos.SKIN_COL[p.look.s] || Cos.color(p.look.c));
     const a = p.face, cr = Math.cos(a), sr = Math.sin(a);
@@ -679,6 +755,8 @@
         ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(fx0, fy0, PR * S * 1.3 * fl, 0, TAU); ctx.fill(); ctx.globalCompositeOperation = 'source-over';
       }
     }
+    const kSp = Cos.CAR_SPEC[p.look.k | 0];
+    if (kSp) { drawCar(ctx, cam, p, t, kSp); ctx.restore(); return [sx, sy, uOf(cam), 0]; }
     wheelDraw(wheels[0]); wheelDraw(wheels[1]);
     // корпус и капот
     drawBox(ctx, cam, p.x, p.y, PR * 0.12, L, Wd, hz, rot, col, '#0a2540');
