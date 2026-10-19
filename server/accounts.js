@@ -100,8 +100,8 @@ function sanitize(acc, p, now) {
 /* ---------- секретные коды (хэши только здесь) ---------- */
 const normC = (t) => String(t || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
 const fnvC = (t) => { let h = 0x811c9dc5; for (const ch of t) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16); };
-const CODE_IDS = { '12809762': 'veriti', 'bc164324': 'lutikov', '257bb5e5': 'rbveriti', 'd83f00d2': 'rybkisbest', '31f8c03b': 'komarov', '8ad72262': 'rybkiskrasavchik' };
-const COIN_CODES = { rybkisbest: 10000, rybkiskrasavchik: 100000 }, C67_CODES = { komarov: 67000 };
+const CODE_IDS = { '12809762': 'veriti', 'bc164324': 'lutikov', '257bb5e5': 'rbveriti', 'd83f00d2': 'rybkisbest', '31f8c03b': 'komarov', '8ad72262': 'rkrasavchik100k' };
+const COIN_CODES = { rybkisbest: 10000, rkrasavchik100k: 100000 }, C67_CODES = { komarov: 67000 };
 const codeId = (c) => CODE_IDS[fnvC(normC(c))] || null;
 
 /* ---------- API ---------- */

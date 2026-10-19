@@ -38,7 +38,7 @@
   const norm = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
   const fnv = (s) => { let h = 0x811c9dc5; for (const ch of s) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16); };
   // награды за коды; сами коды проверяет сервер (POST /api/code), здесь их нет
-  const REWARDS = { veriti: { slot: 's', idx: 1 }, lutikov: { slot: 's', idx: 2 }, rbveriti: { slot: 's', idx: 3 }, rybkisbest: { coins: 10000 }, rybkiskrasavchik: { coins: 100000 }, komarov: { c67: 67000 } };
+  const REWARDS = { veriti: { slot: 's', idx: 1 }, lutikov: { slot: 's', idx: 2 }, rbveriti: { slot: 's', idx: 3 }, rybkisbest: { coins: 10000 }, rkrasavchik100k: { coins: 100000 }, komarov: { c67: 67000 } };
 
   // приводит произвольный объект профиля к полному виду (новые поля, бесплатные предметы, экипировка)
   function normalize(o) {
