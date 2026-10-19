@@ -32,8 +32,8 @@
     ['Пузырьки', 'Bubbles', 150], ['Конфетти', 'Confetti', 220], ['Молнии', 'Lightning', 300], ['Листья', 'Leaves', 160], ['Сакура', 'Blossoms', 240],
     ['Дымок', 'Smoke', 180], ['Рыбки', 'Fish', 260], ['Ноты', 'Notes', 240], ['Искры', 'Sparks', 320], ['Галактика', 'Galaxy', 450],
   ];
-  const SKINS = [['Пингвин', 'Penguin', 0], ['Верити', 'Veriti', -1, 'code'], ['Лютиков', 'Lyutikov', -1, 'code'], ['Радужный Верити', 'Rainbow Veriti', -1, 'code']];
-  const SKIN_COL = ['', '#ffd21f', '#8fc0ff', '#ff7ad9'];
+  const SKINS = [['Пингвин', 'Penguin', 0], ['Верити', 'Veriti', -1, 'code'], ['Лютиков', 'Lyutikov', -1, 'code'], ['Радужный Верити', 'Rainbow Veriti', -1, 'code'], ['Лего 67', 'Lego 67', 67000, '', 'c67']];
+  const SKIN_COL = ['', '#ffd21f', '#8fc0ff', '#ff7ad9', '#2a97e0'];
   const LUT = new Image(); LUT.src = 'lutikov_f.jpg';
   const LUTB = new Image(); LUTB.src = 'lutikov_b.jpg';
 
@@ -47,6 +47,7 @@
   };
   const name = (slot, i, lang) => { const s = SLOTS[slot], it = s.list[i]; return lang === 'ru' ? it[s.nameIdx] : it[s.nameIdx + 1]; };
   const price = (slot, i) => { const s = SLOTS[slot]; return s.list[i][s.priceIdx]; };
+  const cur = (slot, i) => { const s = SLOTS[slot]; return s.list[i][s.priceIdx + 2] || 'coins'; };
   const lock = (slot, i) => { const s = SLOTS[slot]; return s.list[i][s.priceIdx + 1] || ''; };
   const count = (slot) => SLOTS[slot].list.length;
   const color = (i) => COLORS[i % COLORS.length][0];
@@ -348,11 +349,55 @@
       const hue = (Date.now() / 8) % 360;
       for (const x of [L, R]) { const g = ctx.createLinearGradient(x - 0.25, ey - 0.2, x + 0.25, ey + 0.2); g.addColorStop(0, `hsl(${hue},95%,60%)`); g.addColorStop(0.5, `hsl(${(hue + 100) % 360},95%,60%)`); g.addColorStop(1, `hsl(${(hue + 200) % 360},95%,60%)`); ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x - 0.25, ey - 0.18, 0.5, 0.36, 0.12) : ctx.rect(x - 0.25, ey - 0.18, 0.5, 0.36); ctx.fill(); ctx.stroke(); }
       ctx.beginPath(); ctx.moveTo(L + 0.25, ey - 0.04); ctx.lineTo(R - 0.25, ey - 0.04); ctx.stroke();
+
     }
   }
 
   /* ---------- Верити: жёлтый шар с огромной зубастой улыбкой ---------- */
   /* ---------- Лютиков: ледяной шар с лицом (фото) ---------- */
+
+  /* ---------- облик «Лего 67»: две синие кирпичные цифры 6 и 7 с глазами, руками и ботинками ---------- */
+  function drawLego67(ctx, o, ox, vis, bounce, wob, sk) {
+    const cs = 0.255, GLY = [['.####', '###..', '###..', '#####', '###.#', '###.#', '.###.'], ['#####', '#####', '...##', '..##.', '..##.', '.##..', '.##..']];
+    const BODY = ['#1f8ad2', '#2a97e0'], DK = '#0d5a96', STUD = '#5ec0f5', GREY = '#aeb4bd', GDK = '#6e747e';
+    const brick = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); ctx.strokeStyle = DK; ctx.lineWidth = 0.03; ctx.strokeRect(x, y, w, h); };
+    const stud = (x, y, r, c) => { ctx.fillStyle = c; circ(ctx, x, y, r); ctx.fill(); ctx.strokeStyle = 'rgba(0,40,90,.5)'; ctx.lineWidth = 0.02; ctx.stroke(); };
+    const sw = Math.sin(o.phase || 0) * sk * 0.14;
+    ctx.save(); ctx.scale(1 + bounce * 0.04, 1 - bounce * 0.04);
+    const cxs = [-0.74, 0.74], top = -2.58, bot = top + 7 * cs;
+    // ноги и ботинки
+    cxs.forEach((cx, gi) => {
+      const lift = gi ? -sw : sw, ly = bot - 0.05, bty = -0.3 + Math.min(0, lift) * 0.5;
+      brick(cx - 0.15, ly, 0.3, bty - ly + 0.02, '#1f8ad2');
+      brick(cx - 0.17, ly + (bty - ly) * 0.45, 0.34, 0.12, '#0f6aae');
+      const by = bty; brick(cx - 0.3, by, 0.6, 0.3, GREY); stud(cx - 0.12, by + 0.03, 0.06, '#c9ced6'); stud(cx + 0.12, by + 0.03, 0.06, '#c9ced6');
+      ctx.fillStyle = GDK; ctx.fillRect(cx - 0.3, by + 0.22, 0.6, 0.08);
+    });
+    // руки: левая машет, правая опущена
+    const wave = Math.sin((o.t || 0) / 260) * 0.12;
+    for (const [bx, by, ex2, ey2, hx, hy] of [[-1.38, -1.75, -1.7, -2.05 + wave, -1.86, -2.2 + wave], [1.38, -1.9, 1.72, -1.4, 1.78, -1.05]]) {
+      ctx.strokeStyle = DK; ctx.lineWidth = 0.34; ctx.lineCap = 'butt'; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(ex2, ey2); ctx.stroke();
+      ctx.strokeStyle = '#2a97e0'; ctx.lineWidth = 0.27; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(ex2, ey2); ctx.stroke();
+      brick(hx - 0.2, hy - 0.2, 0.4, 0.4, GREY); stud(hx - 0.07, hy - 0.16, 0.05, '#c9ced6'); stud(hx + 0.08, hy - 0.16, 0.05, '#c9ced6');
+      ctx.strokeStyle = GDK; ctx.lineWidth = 0.035; for (let f = 1; f < 4; f++) { ctx.beginPath(); ctx.moveTo(hx - 0.2 + f * 0.1, hy + 0.2); ctx.lineTo(hx - 0.2 + f * 0.1, hy + 0.34); ctx.stroke(); }
+    }
+    // цифры из кирпичиков
+    cxs.forEach((cx, gi) => {
+      const g = GLY[gi], x0 = cx - 2.5 * cs;
+      for (let r = 0; r < 7; r++) for (let q = 0; q < 5; q++) if (g[r][q] === '#') {
+        const x = x0 + q * cs, y = top + r * cs; brick(x, y, cs, cs, BODY[(r + q) & 1]); stud(x + cs / 2, y + cs / 2, cs * 0.24, STUD);
+      }
+    });
+    // глаза
+    const pdx = Math.max(-0.07, Math.min(0.07, ox * 0.14));
+    for (const [ex, ey] of [[-0.62, -2.15], [0.58, -2.12]]) {
+      ctx.fillStyle = '#d8dce2'; ctx.strokeStyle = '#4b5666'; ctx.lineWidth = 0.05; circ(ctx, ex, ey, 0.34); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f7f8fa'; circ(ctx, ex, ey, 0.27); ctx.fill();
+      ctx.fillStyle = '#0b0d14'; circ(ctx, ex + pdx, ey + 0.02, 0.19); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.85)'; circ(ctx, ex + pdx - 0.06, ey - 0.06, 0.05); ctx.fill();
+    }
+    ctx.restore();
+  }
   function drawLyutikov(ctx, o, ox, vis, bounce) {
     const cy = -1.25, r = 1.22;
     ctx.save(); ctx.scale(1 + bounce * 0.05, 1 - bounce * 0.05);
@@ -465,7 +510,7 @@
     const speed = o.speed || 0, sk = Math.min(1, speed / 240);
     const ph = o.phase || 0, wob = Math.sin(ph) * sk;
     const lift = o.lift || 0;
-    const veriti = look.s === 1 || look.s === 3, rbw = look.s === 3, lyut = look.s === 2;
+    const veriti = look.s === 1 || look.s === 3, rbw = look.s === 3, lyut = look.s === 2, lego = look.s === 4;
     const vis = Math.max(0, Math.min(1, (fz + 0.45) / 0.45));           // насколько видно лицо
     const ox = fx * 0.62;
     const aurora = look.c === 16;
@@ -497,7 +542,9 @@
     if (o.inv && Math.floor(t / 90) % 2) ctx.globalAlpha = a0 * 0.4;
     ctx.lineJoin = 'round'; ctx.lineCap = 'round';
 
-    if (lyut) {
+    if (lego) {
+      drawLego67(ctx, Object.assign({}, o, { t }), ox, vis, Math.sin(t / 220 + id) * (0.3 + sk), wob, sk);
+    } else if (lyut) {
       drawLyutikov(ctx, o, ox, vis, Math.sin(t / 220 + id) * (0.3 + sk));
     } else if (veriti) {
       drawVeriti(ctx, Object.assign({}, o, { t }), ox, vis, Math.sin(t / 220 + id) * (0.3 + sk), rbw);
@@ -596,9 +643,10 @@
       const bl = (Math.sin(t / 260) + 1) / 2; ctx.fillStyle = `rgb(255,${70 + bl * 60 | 0},60)`; ctx.strokeStyle = INK; ctx.lineWidth = 0.05; circ(ctx, 0.93, cy - R * 0.72 - 0.55, 0.11); ctx.fill(); ctx.stroke();
       ctx.restore();
     } else if (look.h) {
-      ctx.save(); ctx.translate(fx * 0.3 + (veriti ? 0 : 0), veriti ? -2.38 : lyut ? -2.28 : -2.58); ctx.rotate(fx * 0.1);
+      ctx.save(); ctx.translate(fx * 0.3 + (veriti ? 0 : 0), veriti ? -2.38 : lyut ? -2.28 : lego ? -2.5 : -2.58); ctx.rotate(fx * 0.1);
       drawHat(ctx, look.h, t, fx); ctx.restore();
     }
+    if (lego && look.e) drawEyewear(ctx, look.e, ox * 0.2, 0.62, -2.12);
     if (veriti && look.e && vis > 0.02) { ctx.save(); ctx.globalAlpha *= vis; drawEyewear(ctx, look.e, ox * 0.9, 0.36, -1.7); ctx.restore(); }
     // горячая бомба — красное свечение
     if (o.hot) { const pu = 0.5 + 0.5 * Math.sin(t / 70); ctx.fillStyle = `rgba(255,60,40,${0.18 + 0.2 * pu})`; ell(ctx, 0, -1.3, 1.25, 1.55); ctx.fill(); }
@@ -640,5 +688,5 @@
     return cv;
   }
 
-  root.Cosmetics = { SKIN_COL, SLOTS, COLORS, name, price, lock, count, color, drawPenguin, thumb, shade, lum, star, heart, ell, circ };
+  root.Cosmetics = { SKIN_COL, SLOTS, COLORS, name, price, cur, lock, count, color, drawPenguin, thumb, shade, lum, star, heart, ell, circ };
 })(window);

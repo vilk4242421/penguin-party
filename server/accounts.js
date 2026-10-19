@@ -81,23 +81,25 @@ function sanitize(acc, p, now) {
   const old = acc.profile || null;
   if (JSON.stringify(p).length > 20000) return 'big';
   for (const k of ['coins', 'xp']) if (!Number.isFinite(p[k]) || p[k] < 0 || p[k] > 1e9) return 'bad';
+  if (p.c67 == null) p.c67 = 0; if (!Number.isFinite(p.c67) || p.c67 < 0 || p.c67 > 1e9) return 'bad';
   if (old) {
     // «разрешённый прирост»: накапливается со временем (как ведро), код-награды сервер добавляет сам
     const dt = Math.max(0, (now - (acc.t || now)) / 60000);
     const cAllow = Math.min(COIN_BURST * 3, COIN_BURST + dt * COIN_PER_MIN) + (acc.bonusC || 0), xAllow = Math.min(XP_BURST * 3, XP_BURST + dt * XP_PER_MIN) + (acc.bonusC || 0);
     if (p.coins - old.coins > cAllow) return 'coins';
+    if (p.c67 - (old.c67 || 0) > cAllow + (acc.bonus67 || 0)) return 'coins';
     if (p.xp - old.xp > xAllow) return 'xp';
     let added = 0; for (const s of Object.keys(p.owned || {})) added += arr(p.owned[s]).filter((v) => !arr(old.owned && old.owned[s]).includes(v)).length;
     if (added > MAX_NEW_ITEMS) return 'items';
-  } else if (p.coins > 60000 || p.xp > 400000) return 'coins'; // первый профиль (перенос с устройства)
+  } else if (p.coins > 60000 || p.xp > 400000 || p.c67 > 130000) return 'coins'; // первый профиль (перенос с устройства)
   return null;
 }
 
 /* ---------- секретные коды (хэши только здесь) ---------- */
 const normC = (t) => String(t || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
 const fnvC = (t) => { let h = 0x811c9dc5; for (const ch of t) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16); };
-const CODE_IDS = { '12809762': 'veriti', 'bc164324': 'lutikov', '257bb5e5': 'rbveriti', 'd83f00d2': 'rybkisbest' };
-const COIN_CODES = { rybkisbest: 10000 };
+const CODE_IDS = { '12809762': 'veriti', 'bc164324': 'lutikov', '257bb5e5': 'rbveriti', 'd83f00d2': 'rybkisbest', '31f8c03b': 'komarov' };
+const COIN_CODES = { rybkisbest: 10000 }, C67_CODES = { komarov: 67000 };
 const codeId = (c) => CODE_IDS[fnvC(normC(c))] || null;
 
 /* ---------- API ---------- */
@@ -157,14 +159,14 @@ async function handle(req, res, url, send) {
     const p = body.profile, why = sanitize(acc, p, Date.now());
     if (why) return send(200, { ok: false, e: 'rejected', why, profile: acc.profile, v: acc.v || 0 });
     if (body.v != null && (acc.v || 0) !== body.v && acc.profile) return send(200, { ok: false, e: 'conflict', profile: acc.profile, v: acc.v || 0 });
-    delete p.sig; acc.profile = p; acc.v = (acc.v || 0) + 1; acc.t = Date.now(); acc.bonusC = 0; await st.set(k, acc);
+    delete p.sig; acc.profile = p; acc.v = (acc.v || 0) + 1; acc.t = Date.now(); acc.bonusC = 0; acc.bonus67 = 0; await st.set(k, acc);
     return send(200, { ok: true, v: acc.v });
   }
   if (url === '/api/acode' && req.method === 'POST') { // секретный код для аккаунта: золото выдаётся один раз на аккаунт
     if (limited('ac:' + k, 8, 60 * 1000)) return send(429, { ok: false, wait: true });
     const id = codeId(body.code); if (!id) return send(200, { ok: false });
-    acc.codes = acc.codes || {}; const had = !!acc.codes[id], coins = COIN_CODES[id] || 0;
-    if (!had) { acc.codes[id] = 1; if (coins) acc.bonusC = (acc.bonusC || 0) + coins; await st.set(k, acc); }
+    acc.codes = acc.codes || {}; const had = !!acc.codes[id], coins = COIN_CODES[id] || 0, c67 = C67_CODES[id] || 0;
+    if (!had) { acc.codes[id] = 1; if (coins) acc.bonusC = (acc.bonusC || 0) + coins; if (c67) acc.bonus67 = (acc.bonus67 || 0) + c67; await st.set(k, acc); }
     return send(200, { ok: true, id, had });
   }
   if (url === '/api/logout' && req.method === 'POST') { acc.tokens = arr(acc.tokens).filter((t) => t !== sha(tk)); await st.set(k, acc); return send(200, { ok: true }); }

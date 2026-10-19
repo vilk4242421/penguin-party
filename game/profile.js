@@ -5,7 +5,7 @@
   const C = root.Cosmetics;
 
   const DEF = () => ({
-    name: '', coins: 0, xp: 0,
+    name: '', coins: 0, c67: 0, xp: 0,
     look: { c: 4, p: 0, h: 0, e: 0, t: 0, s: 0 },
     owned: { c: [], p: [], h: [], e: [], t: [], s: [] },
     stats: { ko: 0, roundWins: 0, matchWins: 0, matches: 0, dashes: 0, picks: 0, falls: 0, bestKoRound: 0, friendMatches: 0, tours: 0, tourWins: 0, modeMask: 0, taps: 0, podium: 0 },
@@ -38,7 +38,7 @@
   const norm = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
   const fnv = (s) => { let h = 0x811c9dc5; for (const ch of s) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16); };
   // награды за коды; сами коды проверяет сервер (POST /api/code), здесь их нет
-  const REWARDS = { veriti: { slot: 's', idx: 1 }, lutikov: { slot: 's', idx: 2 }, rbveriti: { slot: 's', idx: 3 }, rybkisbest: { coins: 10000 } };
+  const REWARDS = { veriti: { slot: 's', idx: 1 }, lutikov: { slot: 's', idx: 2 }, rbveriti: { slot: 's', idx: 3 }, rybkisbest: { coins: 10000 }, komarov: { c67: 67000 } };
 
   // приводит произвольный объект профиля к полному виду (новые поля, бесплатные предметы, экипировка)
   function normalize(o) {
@@ -46,9 +46,11 @@
     Q.look = Object.assign(DEF().look, o.look); Q.stats = Object.assign(DEF().stats, o.stats); Q.opts = Object.assign(DEF().opts, o.opts);
     Q.owned = Object.assign(DEF().owned, o.owned); Q.clk = Object.assign(DEF().clk, o.clk); Q.codes = o.codes || {};
     if (Q.clk.done && !Q.owned.h.includes(31)) Q.owned.h.push(31); // прошедшие симулятор получают радужную корону
+    for (const slot of Object.keys(Q.owned)) Q.owned[slot] = Q.owned[slot].filter((v) => v >= 0 && v < C.count(slot)); // удалённые предметы
     for (const slot of Object.keys(Q.owned)) for (let i = 0; i < C.count(slot); i++) if (C.price(slot, i) === 0 && !Q.owned[slot].includes(i)) Q.owned[slot].push(i);
     for (const k of Object.keys(Q.look)) if (!Q.owned[k] || !Q.owned[k].includes(Q.look[k])) Q.look[k] = 0; // экипированное, которого нет в наличии, снимаем
     if (Q.look.c === 0 && !Q.owned.c.includes(0)) Q.look.c = 4;
+    if (!Number.isFinite(Q.c67) || Q.c67 < 0) Q.c67 = 0;
     delete Q.sig;
     return Q;
   }
@@ -74,13 +76,15 @@
   const level = () => Math.floor(Math.sqrt(P.xp / 60)) + 1;
   const levelProgress = () => { const L = level(); const a = (L - 1) * (L - 1) * 60, b = L * L * 60; return (P.xp - a) / (b - a); };
 
-  function earn(n) { P.coins += n; P.xp += n; save(); }
+  function earn(n) { P.coins += n; P.c67 = (P.c67 || 0) + n; P.xp += n; save(); }
   const owned = (slot, i) => P.owned[slot].includes(i);
   function buy(slot, i) {
     const pr = C.price(slot, i);
     if (owned(slot, i)) return true;
-    if (pr < 0 || P.coins < pr) return false;
-    P.coins -= pr; P.owned[slot].push(i); save(); checkAch(); return true;
+    if (pr < 0) return false;
+    if (C.cur(slot, i) === 'c67') { if ((P.c67 || 0) < pr) return false; P.c67 -= pr; }
+    else { if (P.coins < pr) return false; P.coins -= pr; }
+    P.owned[slot].push(i); save(); checkAch(); return true;
   }
   function unlock(slot, i) { if (!owned(slot, i)) { P.owned[slot].push(i); save(); checkAch(); return true; } return false; }
   function equip(slot, i) { if (owned(slot, i)) { P.look[slot] = i; save(); return true; } return false; }
@@ -111,7 +115,7 @@
   ];
   let onAch = null;
   function checkAch() {
-    for (const a of ACH) if (!P.ach[a.id] && a.v() >= a.goal) { P.ach[a.id] = 1; P.coins += a.rew; P.xp += a.rew; save(); if (onAch) onAch(a); }
+    for (const a of ACH) if (!P.ach[a.id] && a.v() >= a.goal) { P.ach[a.id] = 1; P.coins += a.rew; P.c67 = (P.c67 || 0) + a.rew; P.xp += a.rew; save(); if (onAch) onAch(a); }
   }
   function stat(k, n) { P.stats[k] = (P.stats[k] || 0) + (n == null ? 1 : n); save(); checkAch(); }
   function statMax(k, v) { if (v > (P.stats[k] || 0)) { P.stats[k] = v; save(); checkAch(); } }
@@ -194,6 +198,7 @@
     } catch (e) { return { ok: false, net: true }; }
     const c = REWARDS[id]; if (!c) return { ok: false };
     if (c.coins) { const had = !!P.codes[id] || (Acc.token && srvHad); if (!had) { P.coins += c.coins; P.codes[id] = 1; save(); } return { ok: true, had, coins: c.coins }; }
+    if (c.c67) { const had = !!P.codes[id] || (Acc.token && srvHad); if (!had) { P.c67 = (P.c67 || 0) + c.c67; P.codes[id] = 1; save(); } return { ok: true, had, c67: c.c67 }; }
     const had = owned(c.slot, c.idx);
     unlock(c.slot, c.idx); P.codes[id] = 1; P.look[c.slot] = c.idx; save();
     return { ok: true, had, slot: c.slot, idx: c.idx };

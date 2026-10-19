@@ -34,7 +34,7 @@ const L = {
     tInfoOff: 'Играют только живые игроки: очки = число игроков − место. Например, 5 игроков: 4·3·2·1·0, 4 игрока: 3·2·1·0, 3: 2·1·0, 2: 1·0.',
     vsBots: 'Против ботов', offlineSub2: 'офлайн, сразу играем', onlineTour: 'Онлайн-турнир', onlineTourSub: 'с живыми игроками', withFriends: 'С друзьями (комната)', onlineShort: 'Онлайн',
     rounds: 'Раундов:', pickMode: 'Режим:', roomSet: 'Настройки комнаты', format: 'Формат:', fTour: '🏆 Турнир', fSeries: '🎮 Один режим', ok: 'Готово',
-    enter: 'Ввести', promoPh: 'Секретный код', badCode: 'Такого кода нет', codeNet: 'Нет связи с сервером — коды работают только онлайн', codeWait: 'Слишком много попыток, подожди минуту', codeOk: (n) => `🎉 Получено: ${n}!`, codeCoins: (n) => `🎉 +${n} 🪙 золота!`, codeHad: 'Этот приз уже у тебя — надето!',
+    enter: 'Ввести', promoPh: 'Секретный код', badCode: 'Такого кода нет', codeNet: 'Нет связи с сервером — коды работают только онлайн', codeWait: 'Слишком много попыток, подожди минуту', codeOk: (n) => `🎉 Получено: ${n}!`, codeCoins: (n) => `🎉 +${n} 🪙 золота!`, codeC67: (n) => `🎉 +${n} монет 67!`, codeHad: 'Этот приз уже у тебя — надето!',
     lockClicker: '🎣 Выдаётся за прохождение симулятора', lockCode: '🔑 Выдаётся по секретному коду', lkClicker: '🎣 за прохождение симулятора', lkCode: '🔑 по секретному коду',
     tabs: 'Облик', tabc: 'Цвет', tabp: 'Узор', tabh: 'Шляпа', tabe: 'Очки', tabt: 'След',
     dash: 'РЫВОК', go: 'ВПЕРЁД!', round: 'Раунд', draw: 'Ничья!', youWon: 'ТЫ ПОБЕДИЛ!', fell: 'Ты выбыл! 🌊', watching: 'Смотришь за боем', nextRound: 'Войдёшь в следующем раунде',
@@ -68,7 +68,7 @@ const L = {
     tInfoOff: 'Only real players: points = players − place. E.g. 5 players: 4·3·2·1·0, 4 players: 3·2·1·0, 3: 2·1·0, 2: 1·0.',
     vsBots: 'Vs bots', offlineSub2: 'offline, play right away', onlineTour: 'Online tournament', onlineTourSub: 'with real players', withFriends: 'With friends (room)', onlineShort: 'Online',
     rounds: 'Rounds:', pickMode: 'Mode:', roomSet: 'Room settings', format: 'Format:', fTour: '🏆 Tournament', fSeries: '🎮 Single mode', ok: 'Done',
-    enter: 'Enter', promoPh: 'Secret code', badCode: 'No such code', codeNet: 'No connection to the server — codes need internet', codeWait: 'Too many tries, wait a minute', codeOk: (n) => `🎉 Unlocked: ${n}!`, codeCoins: (n) => `🎉 +${n} 🪙 gold!`, codeHad: 'You already have it — equipped!',
+    enter: 'Enter', promoPh: 'Secret code', badCode: 'No such code', codeNet: 'No connection to the server — codes need internet', codeWait: 'Too many tries, wait a minute', codeOk: (n) => `🎉 Unlocked: ${n}!`, codeCoins: (n) => `🎉 +${n} 🪙 gold!`, codeC67: (n) => `🎉 +${n} 67-coins!`, codeHad: 'You already have it — equipped!',
     lockClicker: '🎣 Given for completing the simulator', lockCode: '🔑 Unlocked with a secret code', lkClicker: '🎣 for completing the simulator', lkCode: '🔑 secret code',
     tabs: 'Skin', tabc: 'Color', tabp: 'Pattern', tabh: 'Hat', tabe: 'Eyewear', tabt: 'Trail',
     dash: 'DASH', go: 'GO!', round: 'Round', draw: 'Draw!', youWon: 'YOU WIN!', fell: 'You are out! 🌊', watching: 'Spectating', nextRound: 'You join next round',
@@ -942,8 +942,9 @@ function frame(now) {
 function refreshProfileUI() {
   $('lvlTxt').textContent = `${T('level')} ${Pro.level()}`;
   $('lvlFill').style.width = Math.round(Pro.levelProgress() * 100) + '%';
-  $('coinsTxt').textContent = `🪙 ${P.coins}`;
-  $('coins').textContent = `🪙 ${P.coins}`;
+  const c67 = `<span class="c67">67</span>${P.c67 || 0}`;
+  $('coinsTxt').innerHTML = `🪙 ${P.coins} <span class="c67sep">·</span> ${c67}`;
+  $('coins').innerHTML = `🪙 ${P.coins} <span class="c67sep">·</span> ${c67}`;
 }
 const modesWord = (n) => (lang === 'ru' ? (n === 1 ? 'режим' : n < 5 ? 'режима' : 'режимов') : 'modes');
 
@@ -994,14 +995,19 @@ function buildWardrobe() {
   for (const s of ['c', 'p', 'h', 'e', 't', 's']) { const b = document.createElement('button'); b.textContent = T('tab' + s); b.className = s === wTab ? 'sel' : ''; b.onclick = () => { wTab = s; GA.play('click'); buildWardrobe(); }; tabs.appendChild(b); }
   const grid = $('grid'); grid.innerHTML = '';
   const n = Cos.count(wTab);
-  for (let i = 0; i < n; i++) {
+  // по возрастанию цены; недоступные (код/кликер) — после обычных; новые предметы за монеты 67 — в самом конце
+  const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => {
+    const grp = (i) => (Cos.cur(wTab, i) === 'c67' ? 2 : Cos.price(wTab, i) < 0 ? 1 : 0);
+    return grp(a) - grp(b) || Cos.price(wTab, a) - Cos.price(wTab, b) || a - b;
+  });
+  for (const i of order) {
     const d = document.createElement('div'); const own = Pro.owned(wTab, i), sel = P.look[wTab] === i, lk = Cos.lock(wTab, i);
     d.className = 'item' + (sel ? ' sel' : '') + (own ? '' : ' lock');
     d.appendChild(Cos.thumb(wTab, i, P.look, 56, lang));
     const l = document.createElement('span'); l.textContent = Cos.name(wTab, i, lang); d.appendChild(l);
     if (own) { const pr = document.createElement('span'); pr.className = 'pr'; pr.textContent = sel ? '✓' : ''; d.appendChild(pr); }
     else if (lk) { const k = document.createElement('span'); k.className = 'lk'; k.textContent = lk === 'clicker' ? T('lkClicker') : T('lkCode'); d.appendChild(k); }
-    else { const pr = document.createElement('span'); pr.className = 'pr'; pr.textContent = `🪙 ${Cos.price(wTab, i)}`; d.appendChild(pr); }
+    else { const pr = document.createElement('span'); pr.className = 'pr'; if (Cos.cur(wTab, i) === 'c67') pr.innerHTML = `<span class="c67">67</span>${Cos.price(wTab, i)}`; else pr.textContent = `🪙 ${Cos.price(wTab, i)}`; d.appendChild(pr); }
     d.onclick = () => {
       if (own) { Pro.equip(wTab, i); GA.play('click'); buildWardrobe(); return; }
       if (lk) { const note = lk === 'clicker' ? T('lockClicker') : T('lockCode'); $('wNote').textContent = note; toast(note); d.classList.remove('shake'); void d.offsetWidth; d.classList.add('shake'); GA.play('click'); return; }
@@ -1017,6 +1023,7 @@ $('bPromo').onclick = async () => {
   if (!r.ok) { toast('❌ ' + (r.net ? T('codeNet') : r.wait ? T('codeWait') : T('badCode'))); GA.play('click'); return; }
   GA.play('ach'); $('promo').value = '';
   if (r.coins) { toast(r.had ? T('codeHad') : T('codeCoins', r.coins)); refreshProfileUI(); return; }
+  if (r.c67) { toast(r.had ? T('codeHad') : T('codeC67', r.c67)); refreshProfileUI(); return; }
   toast(r.had ? T('codeHad') : T('codeOk', Cos.name(r.slot, r.idx, lang)));
   wTab = r.slot; buildWardrobe();
 };
