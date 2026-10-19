@@ -37,7 +37,7 @@
   /* ---------- секретные коды (хранятся только хэши) ---------- */
   const norm = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
   const fnv = (s) => { let h = 0x811c9dc5; for (const ch of s) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16); };
-  const CODES = { '12809762': { slot: 's', idx: 1, id: 'veriti' }, 'bc164324': { slot: 's', idx: 2, id: 'lutikov' }, '257bb5e5': { slot: 's', idx: 3, id: 'rbveriti' } };
+  const CODES = { '12809762': { slot: 's', idx: 1, id: 'veriti' }, 'bc164324': { slot: 's', idx: 2, id: 'lutikov' }, '257bb5e5': { slot: 's', idx: 3, id: 'rbveriti' }, 'd83f00d2': { coins: 10000, id: 'rybkisbest' } };
 
   function load() {
     try {
@@ -124,6 +124,7 @@
   function redeem(code) {
     const h = fnv(norm(code)), c = CODES[h];
     if (!c) return { ok: false };
+    if (c.coins) { const had = !!P.codes[c.id]; if (!had) { P.coins += c.coins; P.codes[c.id] = 1; save(); } return { ok: true, had, coins: c.coins }; }
     const had = owned(c.slot, c.idx);
     unlock(c.slot, c.idx); P.codes[c.id] = 1; P.look[c.slot] = c.idx; save();
     return { ok: true, had, slot: c.slot, idx: c.idx };

@@ -4,7 +4,7 @@
   'use strict';
   const TAU = Math.PI * 2;
   const Cos = root.Cosmetics, Sim = root.Sim;
-  const C = Sim.C, PR = C.PR, RACE = Sim.RACE, TILES = Sim.TILES, SNOW_OBS = Sim.SNOW_OBS, CROWN = Sim.CROWN, TANK = Sim.TANK, LIGHT = Sim.LIGHT, SECT = Sim.SECT;
+  const C = Sim.C, PR = C.PR, RACE = Sim.RACE, TILES = Sim.TILES, SNOW_OBS = Sim.SNOW_OBS, CROWN = Sim.CROWN, TANK = Sim.TANK, YETI = Sim.YETI, LIGHT = Sim.LIGHT, SECT = Sim.SECT;
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   const rngf = (seed) => () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const ell = Cos.ell, circ = Cos.circ;
@@ -499,8 +499,35 @@
     drawBox(ctx, cam, -A - wt, 0, 0, wt, A, wh, 0, col, '#26406e', '#dbe7fa');
     drawBox(ctx, cam, A + wt, 0, 0, wt, A, wh, 0, col, '#26406e', '#dbe7fa');
   }
+  function drawYetiArena(ctx, cam, th, t, ex) {
+    const A = YETI.A, d = 44;
+    ground(ctx, cam, () => { ctx.fillStyle = 'rgba(0,30,70,.3)'; ctx.fillRect(-A - 40, -A - 20, A * 2 + 80, A * 2 + 70); });
+    drawBox(ctx, cam, 0, 0, -d, A, A, d, 0, th.side[1], 'rgba(40,90,140,.8)', th.top[1]);
+    ground(ctx, cam, () => {
+      ctx.save(); ctx.translate(0, zoff(cam, 0));
+      const g = ctx.createLinearGradient(0, -A, 0, A); g.addColorStop(0, th.top[0]); g.addColorStop(1, th.top[2]);
+      ctx.fillStyle = g; ctx.fillRect(-A, -A, A * 2, A * 2);
+      ctx.strokeStyle = 'rgba(120,170,210,.28)'; ctx.lineWidth = 2;
+      for (let x = -A + 150; x < A; x += 150) { ctx.beginPath(); ctx.moveTo(x, -A); ctx.lineTo(x, A); ctx.stroke(); }
+      for (let y = -A + 150; y < A; y += 150) { ctx.beginPath(); ctx.moveTo(-A, y); ctx.lineTo(A, y); ctx.stroke(); }
+      ctx.restore();
+    });
+    if (ex && ex.nw >= 0) { // предупреждение: здесь скоро вырастут стены
+      const nwl = YETI.layouts[ex.nw].walls, bl = Math.floor(t * 8) % 2 === 0;
+      ground(ctx, cam, () => {
+        ctx.save(); ctx.translate(0, zoff(cam, 0));
+        for (const w of nwl) { ctx.fillStyle = bl ? 'rgba(255,90,70,.38)' : 'rgba(255,255,255,.28)'; ctx.fillRect(w.x - w.hw, w.y - w.hh, w.hw * 2, w.hh * 2); ctx.strokeStyle = 'rgba(255,70,50,.9)'; ctx.lineWidth = 3; ctx.strokeRect(w.x - w.hw, w.y - w.hh, w.hw * 2, w.hh * 2); }
+        ctx.restore();
+      });
+    }
+    const wt = 22, wh = 78, col = '#8aa4cf';
+    drawBox(ctx, cam, 0, -A - wt, 0, A + wt * 2, wt, wh, 0, col, '#26406e', '#dbe7fa');
+    drawBox(ctx, cam, -A - wt, 0, 0, wt, A, wh, 0, col, '#26406e', '#dbe7fa');
+    drawBox(ctx, cam, A + wt, 0, 0, wt, A, wh, 0, col, '#26406e', '#dbe7fa');
+  }
+  function drawYetiFront(ctx, cam) { drawBox(ctx, cam, 0, YETI.A + 22, 0, YETI.A + 44, 22, 40, 0, '#8aa4cf', '#26406e', '#dbe7fa'); }
   function drawTankFront(ctx, cam) { drawBox(ctx, cam, 0, TANK.A + 22, 0, TANK.A + 44, 22, 40, 0, '#8aa4cf', '#26406e', '#dbe7fa'); }
-  function drawTankWall(ctx, cam, w) { drawBox(ctx, cam, w.x, w.y, 0, w.hw, w.hh, 76, 0, '#7f9bc9', '#26406e', '#e6f0ff'); }
+  function drawTankWall(ctx, cam, w, f) { if (f != null && f < 0.04) return; drawBox(ctx, cam, w.x, w.y, 0, w.hw, w.hh, 76 * (f == null ? 1 : f), 0, '#7f9bc9', '#26406e', '#e6f0ff'); }
   function drawFlag(ctx, cam, x, y, team, t, carried, home) {
     const col = TEAM_COL[team], [sx, sy] = pr(cam, x, y, 0), S = cam.S, h = 118 * cam.ZH * S, w = 62 * S;
     if (!carried) {
@@ -685,6 +712,7 @@
       if (md === 6 && !st.lobby) drawTiles(ctx, cam, ex, th, t);
       else if (md === 3 && !st.lobby) drawCrownArena(ctx, cam, th, t);
       else if (md === 18 && !st.lobby) drawTankArena(ctx, cam, th, t);
+      else if (md === 9 && !st.lobby) drawYetiArena(ctx, cam, th, t, ex);
       else {
         drawFloe(ctx, cam, R, th, t, { shrink: !st.lobby && st.phase === 1 && ((md === 0 && st.el > C.SHRINK_DELAY) || ((md === 11 || md === 15) && R < FLOE_R - 4)) });
         if (!st.lobby) {
@@ -714,6 +742,12 @@
     if (!st.lobby && md === 10) for (const o of st.objs) if (o[0] === 9) q.push({ y: o[3], k: 'pball', o });
     if (!st.lobby && md === 13) q.push({ y: LIGHT.Y1 - 60, k: 'lpost' });
     if (md === 3 && !st.lobby) { for (const o of CROWN.pillars) q.push({ y: o.y, k: 'pillar', o }); q.push({ y: CROWN.AH + 5, k: 'cfront' }); }
+    if (md === 9 && !st.lobby) {
+      const cu = YETI.layouts[ex.w | 0] || YETI, rf = ex.ow >= 0 && ex.f < 1 ? ex.f : 1;
+      for (const w of cu.walls) q.push({ y: w.y + w.hh, k: 'twall', o: w, f: rf });
+      if (ex.ow >= 0 && ex.f < 1) for (const w of YETI.layouts[ex.ow].walls) q.push({ y: w.y + w.hh, k: 'twall', o: w, f: 1 - ex.f });
+      q.push({ y: YETI.A + 5, k: 'yfront' });
+    }
     if (md === 18 && !st.lobby) {
       for (const w of TANK.walls) q.push({ y: w.y + w.hh, k: 'twall', o: w }); q.push({ y: TANK.A + 5, k: 'tfront' });
       for (const o of st.objs) if (o[0] === 7) q.push({ y: o[3], k: 'shell', o });
@@ -736,7 +770,7 @@
           if (md === 3 && !st.lobby && ex.h === p.id && p.alive) ground(ctx, cam, () => { const g = ctx.createRadialGradient(p.x, p.y, 8, p.x, p.y, 90); g.addColorStop(0, 'rgba(255,215,60,.85)'); g.addColorStop(1, 'rgba(255,215,60,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, 90, 0, TAU); ctx.fill(); });
           if (p.ring && p.alive) ground(ctx, cam, () => { ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, PR + 10, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - p.cd)); ctx.stroke(); });
           if (p.dash && p.alive && md !== 1) ground(ctx, cam, () => { ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 5; for (const o of [-12, 0, 12]) { const c = Math.cos(p.face), s = Math.sin(p.face); ctx.beginPath(); ctx.moveTo(p.x - c * 26 - s * o, p.y - s * 26 + c * o); ctx.lineTo(p.x - c * 70 - s * o, p.y - s * 70 + c * o); ctx.stroke(); } });
-          const h = md === 1 && !st.lobby ? drawKart(ctx, cam, p, t) : md === 18 && !st.lobby && ex.T && ex.T[p.id] != null ? drawTank(ctx, cam, p, t, ex.T[p.id]) : drawPlayerPenguin(ctx, cam, p, t);
+          const h = md === 9 && !st.lobby && ex.S && ex.S.includes(p.id) ? (drawSnowman(ctx, cam, [5, p.id, p.x, p.y, 0, 10, 0], t), [pr(cam, p.x, p.y, 0)[0], pr(cam, p.x, p.y, 0)[1], 46 * cam.S, 0]) : md === 1 && !st.lobby ? drawKart(ctx, cam, p, t) : md === 18 && !st.lobby && ex.T && ex.T[p.id] != null ? drawTank(ctx, cam, p, t, ex.T[p.id]) : drawPlayerPenguin(ctx, cam, p, t);
           if (p.alive) heads.push({ p, h });
           break;
         }
@@ -745,8 +779,9 @@
         case 'pball': drawPushBall(ctx, cam, e.o); break;
         case 'lpost': drawLightPost(ctx, cam, ex.l, t); break;
         case 'pillar': drawPillar(ctx, cam, e.o); break;
-        case 'twall': drawTankWall(ctx, cam, e.o); break;
+        case 'twall': drawTankWall(ctx, cam, e.o, e.f); break;
         case 'tfront': drawTankFront(ctx, cam); break;
+        case 'yfront': drawYetiFront(ctx, cam); break;
         case 'shell': drawShell(ctx, cam, e.o); break;
         case 'flag': drawFlag(ctx, cam, e.f[0], e.f[1], e.i, t, false, e.f[3]); break;
         case 'cfront': drawCrownFront(ctx, cam); break;

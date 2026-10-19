@@ -31,7 +31,7 @@ const L = {
     tInfoOff: 'Играют только живые игроки: очки = число игроков − место. Например, 5 игроков: 4·3·2·1·0, 4 игрока: 3·2·1·0, 3: 2·1·0, 2: 1·0.',
     vsBots: 'Против ботов', offlineSub2: 'офлайн, сразу играем', onlineTour: 'Онлайн-турнир', onlineTourSub: 'с живыми игроками', withFriends: 'С друзьями (комната)', onlineShort: 'Онлайн',
     rounds: 'Раундов:', pickMode: 'Режим:', roomSet: 'Настройки комнаты', format: 'Формат:', fTour: '🏆 Турнир', fSeries: '🎮 Один режим', ok: 'Готово',
-    enter: 'Ввести', promoPh: 'Секретный код', badCode: 'Такого кода нет', codeOk: (n) => `🎉 Получено: ${n}!`, codeHad: 'Этот приз уже у тебя — надето!',
+    enter: 'Ввести', promoPh: 'Секретный код', badCode: 'Такого кода нет', codeOk: (n) => `🎉 Получено: ${n}!`, codeCoins: (n) => `🎉 +${n} 🪙 золота!`, codeHad: 'Этот приз уже у тебя — надето!',
     lockClicker: '🎣 Выдаётся за прохождение симулятора', lockCode: '🔑 Выдаётся по секретному коду', lkClicker: '🎣 за прохождение симулятора', lkCode: '🔑 по секретному коду',
     tabs: 'Облик', tabc: 'Цвет', tabp: 'Узор', tabh: 'Шляпа', tabe: 'Очки', tabt: 'След',
     dash: 'РЫВОК', go: 'ВПЕРЁД!', round: 'Раунд', draw: 'Ничья!', youWon: 'ТЫ ПОБЕДИЛ!', fell: 'Ты выбыл! 🌊', watching: 'Смотришь за боем', nextRound: 'Войдёшь в следующем раунде',
@@ -46,7 +46,7 @@ const L = {
     updating: 'Обновляем…', joinRoomHint: 'Нажми «Войти», чтобы попасть в комнату друзей', needTwo: 'Нужно минимум 2 игрока (или включи ботов)',
     pk: ['Сила!', 'Заморозка!', 'Ударная волна!', 'Щит!'], roundN: (a, b) => `Раунд ${a} из ${b}`, results: 'Итоги раунда', nextIn: 'Дальше через', pts: 'очк.',
     finalT: 'Итоги', winnerIs: 'Победитель', yourPlace: (n) => `Твоё место: ${n}`, caged: 'Ты в клетке! 😅', again: '🔁 Ещё раз', toMenu: '🏠 В меню', leave: '✖ Выйти', newGameIn: 'Новая игра через',
-    laps: (n) => `Круг ${n}/2`, lap: (n) => `Круг ${n}!`, fin: (n) => `Финиш — ${n} место!`, pass: 'Бомба у тебя! Передай!', youHot: '💣 БОМБА У ТЕБЯ!', hurt: 'Ай!', fishGot: (n) => `+${n} 🐟`,
+    laps: (n) => `Круг ${n}/2`, lap: (n) => `Круг ${n}!`, fin: (n) => `Финиш — ${n} место!`, pass: 'Бомба у тебя! Передай!', youHot: '💣 БОМБА У ТЕБЯ!', youSnow: '⛄ ТЫ СНЕГОВИК! Лови пингвинов!', hurt: 'Ай!', fishGot: (n) => `+${n} 🐟`,
     kingHint: '👑 Лови того, у кого корона!', youCrown: '👑 КОРОНА У ТЕБЯ! Убегай!', wait2: 'Ждём соперников…',
   },
   en: {
@@ -63,7 +63,7 @@ const L = {
     tInfoOff: 'Only real players: points = players − place. E.g. 5 players: 4·3·2·1·0, 4 players: 3·2·1·0, 3: 2·1·0, 2: 1·0.',
     vsBots: 'Vs bots', offlineSub2: 'offline, play right away', onlineTour: 'Online tournament', onlineTourSub: 'with real players', withFriends: 'With friends (room)', onlineShort: 'Online',
     rounds: 'Rounds:', pickMode: 'Mode:', roomSet: 'Room settings', format: 'Format:', fTour: '🏆 Tournament', fSeries: '🎮 Single mode', ok: 'Done',
-    enter: 'Enter', promoPh: 'Secret code', badCode: 'No such code', codeOk: (n) => `🎉 Unlocked: ${n}!`, codeHad: 'You already have it — equipped!',
+    enter: 'Enter', promoPh: 'Secret code', badCode: 'No such code', codeOk: (n) => `🎉 Unlocked: ${n}!`, codeCoins: (n) => `🎉 +${n} 🪙 gold!`, codeHad: 'You already have it — equipped!',
     lockClicker: '🎣 Given for completing the simulator', lockCode: '🔑 Unlocked with a secret code', lkClicker: '🎣 for completing the simulator', lkCode: '🔑 secret code',
     tabs: 'Skin', tabc: 'Color', tabp: 'Pattern', tabh: 'Hat', tabe: 'Eyewear', tabt: 'Trail',
     dash: 'DASH', go: 'GO!', round: 'Round', draw: 'Draw!', youWon: 'YOU WIN!', fell: 'You are out! 🌊', watching: 'Spectating', nextRound: 'You join next round',
@@ -78,7 +78,7 @@ const L = {
     updating: 'Updating…', joinRoomHint: 'Press “Join” to enter your friends’ room', needTwo: 'Need at least 2 players (or enable bots)',
     pk: ['Power!', 'Freeze!', 'Shockwave!', 'Shield!'], roundN: (a, b) => `Round ${a} of ${b}`, results: 'Round results', nextIn: 'Next in', pts: 'pts',
     finalT: 'Results', winnerIs: 'Winner', yourPlace: (n) => `Your place: ${n}`, caged: 'You are caged! 😅', again: '🔁 Again', toMenu: '🏠 Menu', leave: '✖ Leave', newGameIn: 'New game in',
-    laps: (n) => `Lap ${n}/2`, lap: (n) => `Lap ${n}!`, fin: (n) => `Finished — place ${n}!`, pass: 'You have the bomb! Pass it!', youHot: '💣 YOU HAVE THE BOMB!', hurt: 'Ouch!', fishGot: (n) => `+${n} 🐟`,
+    laps: (n) => `Lap ${n}/2`, lap: (n) => `Lap ${n}!`, fin: (n) => `Finished — place ${n}!`, pass: 'You have the bomb! Pass it!', youHot: '💣 YOU HAVE THE BOMB!', youSnow: '⛄ YOU ARE A SNOWMAN! Catch the penguins!', hurt: 'Ouch!', fishGot: (n) => `+${n} 🐟`,
     kingHint: '👑 Chase the crown holder!', youCrown: '👑 YOU HAVE THE CROWN! Run!', wait2: 'Waiting for opponents…',
   },
 };
@@ -409,6 +409,8 @@ function handleEvents(evs) {
         if (e[1] === myId) Pro.stat('picks');
         break;
       }
+      case 'wallsw': GA.play('hit'); shake = Math.max(shake, 6); break;
+      case 'snow': Sc.puff(e[1], e[2], 26, 10, 200, '#ffffff'); Sc.ring(e[1], e[2], '#bfe6fa', 160); GA.play('hit'); break;
       case 'freeze': Sc.ring(e[1], e[2], '#9fe6ff', 300, 0.9); for (let i = 0; i < 14; i++) { const a = Math.random() * TAU, s = 100 + Math.random() * 220; Sc.part({ type: 'star', x: e[1], y: e[2], z: 20, vx: Math.cos(a) * s, vy: Math.sin(a) * s, vz: 80, life: 0.8, r: 6, col: '#c8f3ff', rot: Math.random() * 6 }); } GA.play('freeze'); shake = Math.max(shake, 6); break;
       case 'shock': Sc.ring(e[1], e[2], '#ffae5c', 330, 0.7); Sc.ring(e[1], e[2], '#fff', 220, 0.5); GA.play('shock'); shake = Math.max(shake, 14); break;
       case 'wind': windFlash = performance.now() + 1700; GA.play('wind'); break;
@@ -553,6 +555,7 @@ function pushC(me, ox, oy, orad, bounce, damp) {
 const WALL_R = { 2: 350, 3: 345, 4: 350, 5: 350, 7: 350, 8: 350, 9: 350, 10: 348, 12: 350, 13: 430, 14: 348, 16: 350, 17: 355 };
 function wallFix(me, md) {
   if (md === 18) { Sim.tankWalls(me); return; }
+  if (md === 9) { (Sim.YETI.layouts[curW] || Sim.YETI).push(me); return; }
   if (md === 3) {
     const CR = Sim.CROWN, lx = CR.AW - PR * 0.9, ly = CR.AH - PR * 0.9;
     if (me.x > lx) { me.x = lx; if (me.vx > 0) me.vx *= -0.55; } else if (me.x < -lx) { me.x = -lx; if (me.vx < 0) me.vx *= -0.55; }
@@ -573,9 +576,11 @@ function wallFix(me, md) {
   if (md === 4) for (const o of SNOW_OBS) pushC(me, o.x, o.y, o.r, 0.25, 1);
 }
 
+let curW = 0;
 function buildOnline(now, dt) {
   const sn = net.snaps; if (!sn.length) return null;
   const last = sn[sn.length - 1];
+  curW = (last.ex && last.ex.w) | 0;
   const rt = now - 110;
   let a = sn[0], b = sn[0];
   for (let i = sn.length - 1; i >= 0; i--) { if (sn[i].at <= rt) { a = sn[i]; b = sn[Math.min(i + 1, sn.length - 1)]; break; } a = sn[i]; b = sn[i]; }
@@ -588,7 +593,7 @@ function buildOnline(now, dt) {
     const md = last.ph === 4 ? -1 : last.md, M = md < 0 ? MODES[0] : MODES[md], ph = M.phys;
     const iv = mp.frozen ? { x: 0, y: 0 } : getInputVec();
     let slowK = 1; if (md === 1) for (const o of last.o) if (o[0] === 11 && Math.hypot(me.x - o[2], me.y - o[3]) < o[4]) { slowK = 0.45; break; }
-    const kk0 = ph.acc * (mp.boost ? (ph.boostAcc || 1.15) : 1) * (mp.hot ? (md === 3 ? 1.1 : 1.2) : 1) * slowK;
+    const kk0 = ph.acc * (mp.boost ? (ph.boostAcc || 1.15) : 1) * (mp.hot ? (md === 3 ? 1.1 : 1.2) : 1) * slowK * (md === 9 && last.ex && last.ex.S && last.ex.S.includes(myId) ? 1.06 : 1);
     me.vx += iv.x * kk0 * dt; me.vy += iv.y * kk0 * dt;
     const f = Math.exp(-ph.fric * (mp.frozen ? 2.4 : 1) * dt); me.vx *= f; me.vy *= f; me.x += me.vx * dt; me.y += me.vy * dt;
     wallFix(me, md);
@@ -745,6 +750,7 @@ function updateHud(now) {
     else if (md === 18 && me && !me.alive) sub = T('tankDead', (V.ex.D && V.ex.D[myId]) || 1);
     else if (me && !me.alive && md !== 1) sub = T('fell') + ' · ' + T('watching');
     else if (md === 5 && me && me.hot) sub = T('youHot');
+    else if (md === 9 && me && V.ex && V.ex.S && V.ex.S.includes(myId)) sub = T('youSnow');
     else if (md === 18 && V.ex && V.ex.T && V.ex.T[myId] != null && (V.el < 7 || (V.ex.fl && (V.ex.fl[1 - V.ex.T[myId]][2] === myId || V.ex.fl[V.ex.T[myId]][2])))) { const t0 = V.ex.T[myId], hs = M[lang].hints; sub = (t0 ? '🔵 ' : '🔴 ') + (V.ex.fl[1 - t0][2] === myId ? hs[1] : V.ex.fl[t0][2] ? hs[2] : hs[0]); }
     else if (M[lang] && M[lang].hints && V.ex && V.ex.hi != null && M[lang].hints[V.ex.hi]) sub = M[lang].hints[V.ex.hi];
     else if (md === 3 && me && me.hot) sub = T('youCrown');
@@ -1001,8 +1007,10 @@ function buildWardrobe() {
 $('bPromo').onclick = () => {
   GA.init(); const r = Pro.redeem($('promo').value);
   if (!r.ok) { toast('❌ ' + T('badCode')); GA.play('click'); return; }
-  GA.play('ach'); toast(r.had ? T('codeHad') : T('codeOk', Cos.name(r.slot, r.idx, lang)));
-  $('promo').value = ''; wTab = r.slot; buildWardrobe();
+  GA.play('ach'); $('promo').value = '';
+  if (r.coins) { toast(r.had ? T('codeHad') : T('codeCoins', r.coins)); refreshProfileUI(); return; }
+  toast(r.had ? T('codeHad') : T('codeOk', Cos.name(r.slot, r.idx, lang)));
+  wTab = r.slot; buildWardrobe();
 };
 $('promo').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('bPromo').click(); });
 

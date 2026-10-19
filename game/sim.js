@@ -39,13 +39,13 @@
   // трассы в духе Формулы-1: прямые, шпильки, шикана и скоростные повороты. Точка [x, y, r]: угол со скруглением r (0 — на прямой)
   // трассы в духе Формулы-1: прямые, шпильки, шикана и скоростные повороты. Точка [x, y, r]: угол со скруглением r (0 — на прямой)
   RACE.maps = [
- { name: 'Монца', ctrl: [[-300,-850,0],[1400,-850,200],[1800,-600,220],[2200,-850,200],[2350,-800,330],[2650,-200,420],[2350,550,360],[1500,850,300],[-300,850,0],[-1500,850,200],[-1900,600,220],[-2300,850,200],[-2550,700,380],[-2650,-100,420],[-2300,-750,330]] },
- { name: 'Монако', ctrl: [[0,-1100,0],[1300,-1100,250],[1700,-700,220],[1700,-100,200],[1100,150,200],[1100,700,230],[1650,1000,230],[1600,1700,260],[700,1750,230],[200,1300,200],[-500,1300,220],[-700,700,200],[-1500,700,230],[-1750,100,230],[-1500,-500,250],[-900,-1100,250]] },
- { name: 'Спа', ctrl: [[-600,-900,0],[1400,-900,240],[2300,-100,300],[1600,500,200],[900,350,200],[400,900,230],[1000,1500,280],[300,1900,250],[-900,1550,260],[-1200,800,230],[-2100,500,260],[-2500,-300,320],[-1900,-800,300]] },
- { name: 'Сузука', ctrl: [[-500,-1000,0],[1200,-1000,260],[1900,-600,230],[1900,0,200],[1200,200,200],[400,-100,200],[-300,300,200],[400,800,220],[1300,950,260],[1300,1600,260],[300,1700,250],[-800,1500,250],[-1500,900,260],[-1500,100,220],[-2100,-300,260],[-1700,-850,280]] },
- { name: 'Сильверстоун', ctrl: [[-200,-900,0],[1300,-900,220],[1850,-450,240],[1450,50,200],[1750,500,230],[1400,1050,250],[600,1100,230],[100,700,200],[-500,1100,230],[-1400,1100,260],[-2100,500,280],[-2150,-300,300],[-1500,-850,300]] },
- { name: 'Интерлагос', ctrl: [[-400,-800,0],[1000,-800,230],[1700,-350,250],[1500,300,220],[800,500,200],[1200,1000,230],[900,1550,250],[-100,1650,250],[-900,1300,230],[-1000,700,200],[-1900,650,260],[-2300,0,300],[-1900,-650,300]] },
- { name: 'Баку', ctrl: [[-700,-1000,0],[1700,-1000,220],[2100,-600,200],[2100,400,200],[1600,700,200],[1600,1200,220],[900,1500,220],[-200,1500,230],[-300,900,200],[-1100,900,200],[-1300,300,200],[-2000,300,230],[-2300,-300,260],[-2000,-900,280]] },
+ { name: 'Монако', ctrl: [[-800,-1500,0],[100,-1500,160],[480,-1230,160],[860,-1500,160],[1500,-1500,250],[1500,-550,250],[900,-550,150],[560,-290,150],[220,-550,150],[-1300,-550,250],[-1300,400,250],[-500,400,150],[-130,140,150],[240,400,150],[1500,400,250],[1500,1300,250],[-2050,1300,300],[-2050,-1500,300]] },
+ { name: 'Спа', ctrl: [[-1500,-1500,0],[900,-1500,180],[1600,-1200,220],[2400,-1300,300],[2900,-500,300],[2700,300,250],[1800,600,200],[1000,300,160],[500,-100,170],[-100,100,170],[200,700,200],[1000,1000,200],[1900,1300,260],[1500,1900,260],[500,1700,220],[-300,1200,180],[-1000,1700,220],[-1900,1800,250],[-2500,1100,260],[-1900,600,200],[-2600,100,260],[-2900,-700,300],[-2300,-1300,260]] },
+ { name: 'Сузука', ctrl: [[-800,-1400,0],[1400,-1400,250],[2300,-1100,280],[2300,-400,230],[1600,100,200],[-500,100,200],[-1000,450,200],[-500,800,200],[1700,800,200],[2400,1200,260],[1900,1700,260],[1000,1500,200],[300,1750,220],[-700,1500,200],[-1300,1750,230],[-2200,1500,260],[-2500,800,260],[-1900,300,200],[-2500,-300,260],[-2200,-1000,260]] },
+ { name: 'Монца', ctrl: [[-300,-1000,0],[1200,-1000,150],[1500,-750,150],[1800,-1000,150],[2400,-1000,330],[2800,-500,330],[2500,100,250],[1800,100,200],[1500,500,200],[1900,900,200],[2300,1300,260],[1800,1700,260],[900,1500,200],[500,1100,160],[0,1500,200],[-700,1700,260],[-1400,1400,200],[-1100,900,160],[-1700,500,200],[-2300,800,260],[-2800,300,300],[-2700,-500,300],[-2200,-900,260],[-1300,-700,200],[-900,-1000,160]] },
+ { name: 'Сильверстоун', ctrl: [[-300,-1300,0],[1500,-1300,250],[2400,-800,300],[2000,-200,200],[1000,-500,200],[500,-100,170],[1100,300,190],[2200,500,250],[2600,1200,300],[1800,1700,260],[900,1300,200],[300,1800,230],[-500,1500,200],[-1200,1800,250],[-2100,1500,260],[-1700,900,200],[-2400,500,260],[-2000,-100,220],[-2700,-600,260],[-2200,-1200,260]] },
+ { name: 'Интерлагос', ctrl: [[-400,-1400,0],[1400,-1400,260],[2300,-1000,300],[2600,-300,260],[1800,0,200],[1300,-400,170],[800,0,170],[1300,500,190],[2200,800,240],[2400,1500,260],[1500,1800,240],[900,1300,180],[200,1700,220],[-600,1500,200],[-1000,900,180],[-1700,1200,230],[-2400,800,260],[-1900,200,200],[-2600,-300,260],[-2300,-1000,260],[-1400,-1300,220]] },
+ { name: 'Баку', ctrl: [[-1500,-1500,0],[1700,-1500,250],[2300,-1050,250],[2300,-400,250],[1600,-400,170],[1250,-150,170],[900,-400,170],[-1700,-400,250],[-1700,500,250],[-1100,500,170],[-750,250,170],[-400,500,170],[1700,500,250],[1700,1500,250],[-2400,1500,300],[-2400,-1500,300]] },
 ];
   function buildTrack(ctrl) {
     const raw = [], N = ctrl.length;
@@ -782,43 +782,148 @@
     objs(g) { return g.ms.w.map((w) => [6, w.id, Math.round(w.x), Math.round(w.y), Math.round(w.r), 0, Math.round((1 - w.t / 1.15) * 100), 0]); },
   });
 
-  /* ---------- 9. Снеговик-охотник ---------- */
+  /* ---------- 9. Снеговик-охотник (арена со стенами, пойманный становится снеговиком) ---------- */
+  function mkArena(A, wl) {
+    const walls = wl.map(([x, y, hw, hh]) => ({ x, y, hw, hh }));
+    const hit = (x, y, pad) => {
+      if (Math.abs(x) > A - 4 || Math.abs(y) > A - 4) return true;
+      for (const w of walls) if (Math.abs(x - w.x) < w.hw + pad && Math.abs(y - w.y) < w.hh + pad) return true;
+      return false;
+    };
+    const see = (x0, y0, x1, y1, pad) => {
+      const d = Math.hypot(x1 - x0, y1 - y0), n = Math.max(2, Math.ceil(d / 18));
+      for (let i = 1; i < n; i++) { const k = i / n; if (hit(x0 + (x1 - x0) * k, y0 + (y1 - y0) * k, pad)) return false; }
+      return true;
+    };
+    const push = (p) => {
+      const lim = A - C.PR * 0.9;
+      if (p.x > lim) { p.x = lim; if (p.vx > 0) p.vx *= -0.4; } else if (p.x < -lim) { p.x = -lim; if (p.vx < 0) p.vx *= -0.4; }
+      if (p.y > lim) { p.y = lim; if (p.vy > 0) p.vy *= -0.4; } else if (p.y < -lim) { p.y = -lim; if (p.vy < 0) p.vy *= -0.4; }
+      const r = C.PR * 0.85;
+      for (const w of walls) {
+        const cx = Math.max(w.x - w.hw, Math.min(p.x, w.x + w.hw)), cy = Math.max(w.y - w.hh, Math.min(p.y, w.y + w.hh));
+        let dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy);
+        if (d < r) {
+          if (d < 0.001) { const ox = w.hw - Math.abs(p.x - w.x), oy = w.hh - Math.abs(p.y - w.y); if (ox < oy) { dx = p.x < w.x ? -1 : 1; dy = 0; } else { dx = 0; dy = p.y < w.y ? -1 : 1; } p.x = cx + dx * (r + 1); p.y = cy + dy * (r + 1); }
+          else { dx /= d; dy /= d; p.x = cx + dx * r; p.y = cy + dy * r; }
+          const vn = p.vx * dx + p.vy * dy; if (vn < 0) { p.vx -= 1.3 * vn * dx; p.vy -= 1.3 * vn * dy; }
+        }
+      }
+    };
+    const nav = { n: [], adj: [] };
+    for (let y = -A + 60; y <= A - 60; y += 70) for (let x = -A + 60; x <= A - 60; x += 70) if (!hit(x, y, C.PR + 14)) nav.n.push({ x, y });
+    nav.adj = nav.n.map((a, i) => { const l = []; nav.n.forEach((b, j) => { if (i !== j) { const d = Math.hypot(a.x - b.x, a.y - b.y); if (d < 110 && see(a.x, a.y, b.x, b.y, C.PR + 4)) l.push([j, d]); } }); return l; });
+    const path = (x0, y0, x1, y1) => {
+      if (see(x0, y0, x1, y1, C.PR + 6)) return [x1, y1];
+      const N = nav.n, dist = new Float32Array(N.length).fill(1e9), prev = new Int16Array(N.length).fill(-1), done = new Uint8Array(N.length);
+      N.forEach((n, i) => { if (see(x0, y0, n.x, n.y, C.PR + 6)) dist[i] = Math.hypot(n.x - x0, n.y - y0); });
+      for (let it = 0; it < N.length; it++) {
+        let u = -1, bd = 1e9; for (let i = 0; i < N.length; i++) if (!done[i] && dist[i] < bd) { bd = dist[i]; u = i; }
+        if (u < 0) break; done[u] = 1;
+        for (const [v, w] of nav.adj[u]) if (dist[u] + w < dist[v]) { dist[v] = dist[u] + w; prev[v] = u; }
+      }
+      let best = -1, bc = 1e9;
+      N.forEach((n, i) => { if (dist[i] < 1e8 && see(n.x, n.y, x1, y1, C.PR + 6)) { const c = dist[i] + Math.hypot(n.x - x1, n.y - y1); if (c < bc) { bc = c; best = i; } } });
+      if (best < 0) return [x1, y1];
+      let k = best; while (prev[k] >= 0) k = prev[k];
+      return [N[k].x, N[k].y];
+    };
+    return { A, walls, hit, see, push, path, nav };
+  }
+  const YL0 = [[-300, -300, 40, 160], [300, 300, 40, 160], [300, -300, 160, 40], [-300, 300, 160, 40], [0, 0, 80, 80],
+    [-540, 0, 30, 60], [540, 0, 30, 60], [0, -540, 60, 30], [0, 540, 60, 30], [-120, -480, 30, 30], [120, 480, 30, 30], [480, -120, 30, 30], [-480, 120, 30, 30]];
+  // запасные раскладки стен (детерминированно, чтобы клиент и сервер видели одно и то же); проверяем, что арена не разваливается на части
+  function genYeti(seed) {
+    let sd = seed; const r = () => { sd = (Math.imul(sd, 1664525) + 1013904223) >>> 0; return sd / 4294967296; };
+    for (let tries = 0; tries < 3000; tries++) {
+      const L = [];
+      for (let k = 0; k < 600 && L.length < 11; k++) {
+        const vert = r() < 0.5, len = 60 + r() * 130, th = 26 + r() * 16, hw = vert ? th : len, hh = vert ? len : th;
+        const x = (r() * 2 - 1) * (600 - 150 - hw), y = (r() * 2 - 1) * (600 - 150 - hh);
+        if (L.every(([ox, oy, ow, oh]) => Math.abs(x - ox) > hw + ow + 135 || Math.abs(y - oy) > hh + oh + 135)) L.push([Math.round(x), Math.round(y), Math.round(hw), Math.round(hh)]);
+      }
+      if (L.length < 8) continue;
+      const a = mkArena(600, L), n = a.nav.n.length, seen = new Uint8Array(n), st = [0]; seen[0] = 1; let c = 1;
+      while (st.length) { const u = st.pop(); for (const [v] of a.nav.adj[u]) if (!seen[v]) { seen[v] = 1; c++; st.push(v); } }
+      if (c === n) return { L, a };
+    }
+    return { L: YL0, a: mkArena(600, YL0) };
+  }
+  const YL = [mkArena(600, YL0)]; for (let k = 1; k <= 5; k++) YL.push(genYeti(1000 + k * 77).a);
+  const YETI = YL[0]; YETI.layouts = YL;
   MODES.push({
-    id: 9, key: 'yeti', icon: '⛄', timed: 0, cap: 60, view: { r: 400 },
-    ru: { name: 'Снеговик-охотник', goal: 'Злой снеговик гонится за пингвинами! Кого коснётся — тот выбывает. Продержись дольше всех.', btn: 'РЫВОК' },
-    en: { name: 'Snowman Hunter', goal: 'An evil snowman hunts the penguins! Whoever it touches is out. Survive the longest.', btn: 'DASH' },
-    phys: { acc: 1050, fric: 1.8, dashV: 600, dashT: 0.25, dashCD: 1.6 },
-    init(g) { g.ms = { y: [], ys: 0 }; placeRing(g, 220); },
+    id: 9, key: 'yeti', icon: '⛄', timed: 75, cap: 75, view: { rx: 640, ry: 640 }, live: '⛄',
+    ru: { name: 'Снеговик-охотник', goal: 'Злой снеговик гонится за пингвинами! Кого он поймает — сам становится снеговиком и ловит остальных (первый снеговик остаётся). Останься пингвином дольше всех!', btn: 'РЫВОК' },
+    en: { name: 'Snowman Hunter', goal: 'An evil snowman hunts the penguins! Anyone it catches becomes a snowman too and hunts the rest (the first snowman stays). Stay a penguin the longest!', btn: 'DASH' },
+    phys: { acc: 2000, fric: 4.2, dashV: 420, dashT: 0.22, dashCD: 2.2 },
+    init(g) {
+      g.ms = { y: [], order: [], t0: 1.5, li: 0, ow: -1, nx: -1, nc: 1, swt: -99, ar: YL[0] }; placeRing(g, 230);
+      for (const p of g.players) { p.sn = false; p.a = 0; p.conv = 0; }
+      for (const p of g.players) if (p.inRound) { g.ms.ar.push(p); }
+    },
     step(g, dt) {
       const ms = g.ms, alive = g.alive();
-      for (const p of alive) { g.integrate(p, dt); g.softWall(p, 350); }
-      g.collideAll(alive);
-      const T = [1.5, 15, 32];
-      if (ms.ys < T.length && g.elapsed >= T[ms.ys]) { const a = Math.random() * TAU; ms.y.push({ id: ++g.uid, x: Math.cos(a) * 340, y: Math.sin(a) * 340, st: 0 }); ms.ys++; }
-      const spd = Math.min(290, 165 + g.elapsed * 2.2);
+      { // каждые 7 с стены уходят под землю и вырастают в новых местах (за 1.2 с — предупреждение на полу)
+        const ts = ms.nc * 7;
+        if (ms.nx < 0 && g.elapsed >= ts - 1.2) { const o = []; for (let k = 0; k < YL.length; k++) if (k !== ms.li) o.push(k); ms.nx = o[rnd(o.length)]; }
+        if (g.elapsed >= ts) { ms.ow = ms.li; ms.li = ms.nx; ms.nx = -1; ms.nc++; ms.swt = g.elapsed; ms.ar = YL[ms.li]; g.events.push(['wallsw']); }
+      }
+      const ar = ms.ar;
+      if (ms.t0 > 0 && g.elapsed >= ms.t0) { ms.t0 = -1; const c = [[-480, -480], [480, 480], [480, -480], [-480, 480]][rnd(4)]; ms.y.push({ id: ++g.uid, x: c[0], y: c[1], st: 0 }); }
+      for (const p of alive) { p.speedMul = p.sn ? 1.04 : 1; g.integrate(p, dt); ar.push(p); }
+      g.collideAll(alive); for (const p of alive) ar.push(p);
+      const pen = () => alive.filter((p) => !p.sn);
+      const convert = (v, by) => {
+        v.sn = true; v.a = 1; ms.order.push(v.id); v.dash = 0; v.vx *= 0.3; v.vy *= 0.3; v.inv = 0;
+        g.events.push(['hit', Math.round(v.x), Math.round(v.y), 1, v.id, v.id]); g.events.push(['snow', Math.round(v.x), Math.round(v.y), v.id]);
+      };
+      const spd = Math.min(415, 395 + g.elapsed * 0.3);
       for (const y of ms.y) {
         if (y.st > 0) { y.st -= dt; continue; }
-        let best = null, bd = 1e9; for (const q of alive) { if (!q.alive) continue; const d = Math.hypot(q.x - y.x, q.y - y.y); if (d < bd) { bd = d; best = q; } }
+        let best = null, bd = 1e9; for (const q of pen()) { const d = Math.hypot(q.x - y.x, q.y - y.y); if (d < bd) { bd = d; best = q; } }
         if (!best) continue;
-        y.x += ((best.x - y.x) / (bd || 1)) * spd * dt; y.y += ((best.y - y.y) / (bd || 1)) * spd * dt;
-        if (bd < C.PR + 34 && best.air <= 0) { g.events.push(['hit', Math.round(best.x), Math.round(best.y), 1, best.id, best.id]); g.eliminate(best, 0, 'squash'); y.st = 1.2; }
+        const [tx, ty] = ar.path(y.x, y.y, best.x, best.y), dd = Math.hypot(tx - y.x, ty - y.y) || 1;
+        y.x += ((tx - y.x) / dd) * spd * dt; y.y += ((ty - y.y) / dd) * spd * dt;
+        { const tmp = { x: y.x, y: y.y, vx: 0, vy: 0 }; ar.push(tmp); y.x = tmp.x; y.y = tmp.y; } // снеговик не проходит сквозь стены
+        if (bd < C.PR + 34) { convert(best); break; }
       }
-      g.checkElim();
-      if (g.phase === 'play' && g.elapsed > this.cap) g.finishRound(g.alive().sort(() => Math.random() - 0.5).map((p) => p.id).concat(g.outOrder.slice().reverse()));
+      for (const h of alive) {
+        if (!h.sn || h.conv > 0) { if (h.conv > 0) h.conv -= dt; continue; }
+        for (const q of pen()) { if (q === h) continue; if (Math.hypot(q.x - h.x, q.y - h.y) < C.PR * 2.25) { convert(q, h); q.conv = 1.0; break; } }
+      }
+      const left = alive.filter((p) => !p.sn);
+      if (g.phase === 'play' && (left.length === 0 || g.elapsed > this.cap)) {
+        const surv = left.sort(() => Math.random() - 0.5).map((p) => p.id);
+        g.finishRound(surv.concat(ms.order.slice().reverse()));
+      }
     },
     bot(g, p, dt) {
-      const a = p.ai, ms = g.ms; let mx = 0, my = 0, near = 1e9;
-      for (const y of ms.y) {
-        const dx = p.x - y.x, dy = p.y - y.y, d = Math.hypot(dx, dy) || 1; near = Math.min(near, d);
-        const w = Math.min(5, 300 / d); mx += (dx / d) * w; my += (dy / d) * w;
-        if (d < 320) { const s = (p.x * dy - p.y * dx) >= 0 ? 1 : -1; mx += (-dy / d) * s * w * 0.8; my += (dx / d) * s * w * 0.8; }
+      const a = p.ai, ms = g.ms; let mx = 0, my = 0;
+      if (p.sn) {
+        let best = null, bd = 1e9; for (const q of g.alive()) { if (q.sn) continue; const d = Math.hypot(q.x - p.x, q.y - p.y); if (d < bd) { bd = d; best = q; } }
+        if (!best) { p.in.x = p.in.y = 0; return; }
+        const [tx, ty] = g.ms.ar.path(p.x, p.y, best.x + best.vx * 0.25, best.y + best.vy * 0.25), d = Math.hypot(tx - p.x, ty - p.y) || 1;
+        p.in.x = ((tx - p.x) / d) * a.skill; p.in.y = ((ty - p.y) / d) * a.skill;
+        if (bd < 190 && bd > 60 && p.cd <= 0 && Math.random() < dt * 5 * a.skill) p.dashReq = true;
+        return;
       }
-      const dc = Math.hypot(p.x, p.y);
-      mx += -p.x * 0.002; my += -p.y * 0.002; if (dc > 280) { mx -= (p.x / dc) * 2; my -= (p.y / dc) * 2; }
-      const m = Math.hypot(mx, my) || 1; p.in.x = (mx / m) * a.skill; p.in.y = (my / m) * a.skill;
-      if (near < 135 && p.cd <= 0 && Math.random() < dt * 6 * a.skill) p.dashReq = true;
+      let near = 1e9;
+      const hunters = ms.y.map((y) => [y.x, y.y]).concat(g.alive().filter((q) => q.sn).map((q) => [q.x, q.y]));
+      for (const [hx, hy] of hunters) {
+        const dx = p.x - hx, dy = p.y - hy, d = Math.hypot(dx, dy) || 1; near = Math.min(near, d);
+        const w = Math.min(6, 380 / d); mx += (dx / d) * w; my += (dy / d) * w;
+        if (d < 360) { const s = (p.x * dy - p.y * dx) >= 0 ? 1 : -1; mx += (-dy / d) * s * w * 0.6; my += (dx / d) * s * w * 0.6; }
+      }
+      for (const wl of ms.ar.walls) { // отталкиваемся от стен
+        const cx = Math.max(wl.x - wl.hw, Math.min(p.x, wl.x + wl.hw)), cy = Math.max(wl.y - wl.hh, Math.min(p.y, wl.y + wl.hh)), dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy) || 1;
+        if (d < 120) { const w = (120 - d) / 40; mx += (dx / d) * w; my += (dy / d) * w; }
+      }
+      const lim = YETI.A - 130; if (Math.abs(p.x) > lim) mx -= Math.sign(p.x) * 2.5; if (Math.abs(p.y) > lim) my -= Math.sign(p.y) * 2.5;
+      mx -= p.x * 0.0008; my -= p.y * 0.0008;
+      const m = Math.hypot(mx, my) || 1, fs = Math.min(1, a.skill + 0.25); p.in.x = (mx / m) * fs; p.in.y = (my / m) * fs;
+      if (near < 170 && p.cd <= 0 && Math.random() < dt * 6 * a.skill) p.dashReq = true;
     },
-    ex() { return {}; },
+    ex(g) { const m = g.ms, ts = m.nc * 7; return { S: g.players.filter((p) => p.sn && p.inRound).map((p) => p.id), w: m.li, ow: m.ow, f: Math.min(1, Math.max(0, (g.elapsed - m.swt) / 0.7)), nw: m.nx, tp: m.nx >= 0 ? Math.min(1, Math.max(0, (g.elapsed - (ts - 1.2)) / 1.2)) : 0 }; },
     objs(g) { return g.ms.y.map((y) => [5, y.id, Math.round(y.x), Math.round(y.y), 0, 16, y.st > 0 ? 1 : 0]); },
   });
 
@@ -1706,5 +1811,5 @@
   }
 
   const pointsFor = (n, i) => Math.max(0, n - 1 - i);
-  return { C, Game, MODES, RACE, TILES, SNOW_OBS, CROWN, TANK, tankWalls, PTS3, LIGHT, SECT, cleanLook, pointsFor, PHASES };
+  return { C, Game, MODES, RACE, TILES, SNOW_OBS, CROWN, TANK, YETI, tankWalls, PTS3, LIGHT, SECT, cleanLook, pointsFor, PHASES };
 });
