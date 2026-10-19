@@ -737,7 +737,7 @@ function updateHud(now) {
     const live = ph === 1 && !!M.live;
     const liveTx = (p) => `${M.live}${p.a}${M.liveSuf || ''} · `;
     const sorted = V.players.filter((p) => !p.spec || p.score).sort((a, b) => (live ? b.a - a.a : 0) || b.score - a.score).slice(0, 6);
-    $('score').innerHTML = sorted.map((p) => { const inf = infoOf(p.id); return `<div class="${p.id === myId ? 'me' : ''} ${!p.alive && ph === 1 && !p.spec ? 'dead' : ''}"><i style="background:${(Cos.SKIN_COL[inf.look.s] || Cos.color(inf.look.c))}"></i><span class="nm">${esc(inf.name)}</span>${inf.adm ? ADM : ''}<b>${live ? `<span style="font-size:12px;opacity:.9">${liveTx(p)}</span>` : ''}${p.score}${lrMap.has(p.id) ? ` <u style="text-decoration:none;color:#9be8b0;font-size:12px">+${lrMap.get(p.id)}</u>` : ''}</b></div>`; }).join('');
+    $('score').innerHTML = sorted.map((p) => { const inf = infoOf(p.id); return `<div class="${p.id === myId ? 'me' : ''} ${!p.alive && ph === 1 && !p.spec ? 'dead' : ''}"><i style="background:${(Cos.SKIN_COL[inf.look.s] || Cos.color(inf.look.c))}"></i><span class="nm">${esc(inf.name)}</span><b>${live ? `<span style="font-size:12px;opacity:.9">${liveTx(p)}</span>` : ''}${p.score}${lrMap.has(p.id) ? ` <u style="text-decoration:none;color:#9be8b0;font-size:12px">+${lrMap.get(p.id)}</u>` : ''}</b></div>`; }).join('');
   }
   // кнопка действия
   const dSig = (lobby ? -1 : md) + lang;

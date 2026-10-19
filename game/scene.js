@@ -388,18 +388,37 @@
       ctx.restore();
     });
   }
-  function drawLightLines(ctx, cam, ex, R) {
+  function drawLightArena(ctx, cam, th, t, ex) {
+    const AW = LIGHT.AW, ya = LIGHT.Y1 - 130, yb = LIGHT.Y0 + 90, cy = (ya + yb) / 2, hy = (yb - ya) / 2, d = 44;
+    ground(ctx, cam, () => { ctx.fillStyle = 'rgba(0,30,70,.3)'; ctx.fillRect(-AW - 40, ya - 20, AW * 2 + 80, hy * 2 + 70); });
+    drawBox(ctx, cam, 0, cy, -d, AW, hy, d, 0, th.side[1], 'rgba(40,90,140,.8)', th.top[1]);
+    ground(ctx, cam, () => {
+      ctx.save(); ctx.translate(0, zoff(cam, 0));
+      const g = ctx.createLinearGradient(0, ya, 0, yb); g.addColorStop(0, th.top[0]); g.addColorStop(1, th.top[2]);
+      ctx.fillStyle = g; ctx.fillRect(-AW, ya, AW * 2, hy * 2);
+      ctx.strokeStyle = 'rgba(120,170,210,.35)'; ctx.lineWidth = 2;
+      for (let y = LIGHT.Y1 + 100; y < yb; y += 200) { ctx.beginPath(); ctx.moveTo(-AW, y); ctx.lineTo(AW, y); ctx.stroke(); }
+      ctx.restore();
+    });
+    drawLightLines(ctx, cam, ex, AW);
+    const wt = 22, wh = 64, col = '#8aa4cf';
+    drawBox(ctx, cam, -AW - wt, cy, 0, wt, hy, wh, 0, col, '#26406e', '#dbe7fa');
+    drawBox(ctx, cam, AW + wt, cy, 0, wt, hy, wh, 0, col, '#26406e', '#dbe7fa');
+    drawBox(ctx, cam, 0, ya - wt, 0, AW + wt * 2, wt, wh, 0, col, '#26406e', '#dbe7fa');
+  }
+  function drawLightLines(ctx, cam, ex, AW) {
     ground(ctx, cam, () => {
       ctx.save(); ctx.translate(0, zoff(cam, 1));
-      const n = 20, w = 520 / n, y = LIGHT.Y1; for (let i = 0; i < n; i++) for (let j = 0; j < 2; j++) { ctx.fillStyle = (i + j) & 1 ? '#18202e' : '#ffffff'; ctx.fillRect(-260 + i * w, y - 16 + j * 16, w, 16); }
-      ctx.strokeStyle = 'rgba(40,110,200,.8)'; ctx.lineWidth = 7; ctx.setLineDash([26, 18]); ctx.beginPath(); ctx.moveTo(-270, LIGHT.Y0 - 30); ctx.lineTo(270, LIGHT.Y0 - 30); ctx.stroke(); ctx.setLineDash([]);
-      if (ex.l === 2) { ctx.fillStyle = 'rgba(255,40,40,.13)'; ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill(); }
-      else if (ex.l === 1) { ctx.fillStyle = 'rgba(255,200,40,.1)'; ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill(); }
+      const n = 24, w = AW * 2 / n, y = LIGHT.Y1; for (let i = 0; i < n; i++) for (let j = 0; j < 2; j++) { ctx.fillStyle = (i + j) & 1 ? '#18202e' : '#ffffff'; ctx.fillRect(-AW + i * w, y - 16 + j * 16, w, 16); }
+      ctx.strokeStyle = 'rgba(40,110,200,.8)'; ctx.lineWidth = 7; ctx.setLineDash([26, 18]); ctx.beginPath(); ctx.moveTo(-AW, LIGHT.Y0 - 30); ctx.lineTo(AW, LIGHT.Y0 - 30); ctx.stroke(); ctx.setLineDash([]);
+      const y0 = LIGHT.Y1 - 130, hh = LIGHT.Y0 + 90 - y0;
+      if (ex.l === 2) { ctx.fillStyle = 'rgba(255,40,40,.16)'; ctx.fillRect(-AW, y0, AW * 2, hh); }
+      else if (ex.l === 1) { ctx.fillStyle = 'rgba(255,200,40,.12)'; ctx.fillRect(-AW, y0, AW * 2, hh); }
       ctx.restore();
     });
   }
-  function drawLightPost(ctx, cam, l, t) {
-    const [bx, by] = pr(cam, 0, LIGHT.Y1 - 60, 0), h = 190 * cam.ZH * cam.S, w = 46 * cam.S;
+  function drawLightPost(ctx, cam, l, t, px, py, sc) {
+    sc = sc || 1; const [bx, by] = pr(cam, px || 0, py == null ? LIGHT.Y1 - 60 : py, 0), h = 190 * cam.ZH * cam.S * sc, w = 46 * cam.S * sc;
     ctx.fillStyle = 'rgba(0,40,90,.25)'; ell(ctx, bx + 12 * cam.S, by + 2, w * 0.7, w * 0.25); ctx.fill();
     ctx.fillStyle = '#2c3a58'; ctx.fillRect(bx - w * 0.12, by - h, w * 0.24, h);
     ctx.fillStyle = '#10182a'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2; const bh = w * 2.7, bt = by - h - bh * 0.7;
@@ -713,11 +732,11 @@
       else if (md === 3 && !st.lobby) drawCrownArena(ctx, cam, th, t);
       else if (md === 18 && !st.lobby) drawTankArena(ctx, cam, th, t);
       else if (md === 9 && !st.lobby) drawYetiArena(ctx, cam, th, t, ex);
+      else if (md === 13 && !st.lobby) drawLightArena(ctx, cam, th, t, ex);
       else {
         drawFloe(ctx, cam, R, th, t, { shrink: !st.lobby && st.phase === 1 && ((md === 0 && st.el > C.SHRINK_DELAY) || ((md === 11 || md === 15) && R < FLOE_R - 4)) });
         if (!st.lobby) {
           if (md === 17) drawSectors(ctx, cam, ex, R, t);
-          else if (md === 13) drawLightLines(ctx, cam, ex, R);
           else if (md === 16) drawBeams(ctx, cam, ex, t);
           if (md === 8 || md === 11 || md === 12 || md === 14) drawZones(ctx, cam, st, t);
         }
@@ -740,7 +759,7 @@
     if (!st.lobby && md === 8) for (const o of st.objs) if (o[0] === 6) q.push({ y: o[3] + 800, k: 'meteor', o });
     if (!st.lobby && md === 9) for (const o of st.objs) if (o[0] === 5) q.push({ y: o[3], k: 'yeti', o });
     if (!st.lobby && md === 10) for (const o of st.objs) if (o[0] === 9) q.push({ y: o[3], k: 'pball', o });
-    if (!st.lobby && md === 13) q.push({ y: LIGHT.Y1 - 60, k: 'lpost' });
+    if (!st.lobby && md === 13) { q.push({ y: LIGHT.Y1 - 60, k: 'lpost' }); for (let y = LIGHT.Y0 - 260; y > LIGHT.Y1 + 200; y -= 420) for (const sx of [-1, 1]) q.push({ y, k: 'lpost', x: sx * (LIGHT.AW + 70), sc: 0.62 }); }
     if (md === 3 && !st.lobby) { for (const o of CROWN.pillars) q.push({ y: o.y, k: 'pillar', o }); q.push({ y: CROWN.AH + 5, k: 'cfront' }); }
     if (md === 9 && !st.lobby) {
       const cu = YETI.layouts[ex.w | 0] || YETI, rf = ex.ow >= 0 && ex.f < 1 ? ex.f : 1;
@@ -777,7 +796,7 @@
         case 'meteor': drawMeteorRock(ctx, cam, e.o); break;
         case 'yeti': drawSnowman(ctx, cam, e.o, t); break;
         case 'pball': drawPushBall(ctx, cam, e.o); break;
-        case 'lpost': drawLightPost(ctx, cam, ex.l, t); break;
+        case 'lpost': drawLightPost(ctx, cam, ex.l, t, e.x, e.x == null ? undefined : e.y, e.sc); break;
         case 'pillar': drawPillar(ctx, cam, e.o); break;
         case 'twall': drawTankWall(ctx, cam, e.o, e.f); break;
         case 'tfront': drawTankFront(ctx, cam); break;
@@ -846,15 +865,7 @@
       // имя
       ctx.font = `bold ${nf}px "Trebuchet MS",system-ui,sans-serif`; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(5,30,60,.85)'; ctx.fillStyle = p.isMe ? '#ffd23f' : '#fff';
       ctx.strokeText(p.name, sx, yy - nf * 0.6); ctx.fillText(p.name, sx, yy - nf * 0.6);
-      if (p.adm) { // «Admin» в жёлтой рамке над ником (создатель игры)
-        const fs = Math.max(11, nf * 0.85), ty = yy - nf * 1.95; ctx.font = `bold ${fs}px "Trebuchet MS",system-ui,sans-serif`;
-        const tw = ctx.measureText('Admin').width, bw = tw + fs * 0.9, bh = fs * 1.5;
-        ctx.fillStyle = 'rgba(10,30,60,.82)'; ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2;
-        ctx.beginPath(); (ctx.roundRect ? ctx.roundRect(sx - bw / 2, ty - bh * 0.78, bw, bh, 5) : ctx.rect(sx - bw / 2, ty - bh * 0.78, bw, bh)); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#ffd23f'; ctx.fillText('Admin', sx, ty);
-        ctx.font = `bold ${nf}px "Trebuchet MS",system-ui,sans-serif`;
-      }
-      if (p.isMe) { const by = yy - nf * (p.adm ? 3.3 : 1.5) + Math.sin(t * 6) * 3; ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#0a2540'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(sx, by); ctx.lineTo(sx - 8, by - 12); ctx.lineTo(sx + 8, by - 12); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+      if (p.isMe) { const by = yy - nf * 1.5 + Math.sin(t * 6) * 3; ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#0a2540'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(sx, by); ctx.lineTo(sx - 8, by - 12); ctx.lineTo(sx + 8, by - 12); ctx.closePath(); ctx.fill(); ctx.stroke(); }
       if (p.emote) { ctx.font = `${Math.round(Math.max(30, u * 1.8))}px serif`; ctx.fillStyle = '#000'; ctx.fillText(p.emote.e, sx + u * 1.5, topY - u * 0.4 - (1 - p.emote.k) * 14); }
     }
     drawParts(ctx, cam, dt);

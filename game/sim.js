@@ -725,7 +725,7 @@
    *  ЕЩЁ 10 РЕЖИМОВ (id 8–17)
    * ==================================================================== */
   const SECT = 8;
-  const LIGHT = { Y0: 300, Y1: -300 };
+  const LIGHT = { Y0: 1500, Y1: -1500, AW: 340 };
   const PTS3 = [0, 1, 2].map((i) => { const a = -Math.PI / 2 + (i * TAU) / 3; return { x: Math.cos(a) * 190, y: Math.sin(a) * 190, r: 82 }; });
   const SPIN_L = 370;
   const distSeg = (px, py, ax, ay, bx, by) => { const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1; let t = ((px - ax) * dx + (py - ay) * dy) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t; return Math.hypot(px - (ax + dx * t), py - (ay + dy * t)); };
@@ -1076,10 +1076,10 @@
 
   /* ---------- 13. Светофор ---------- */
   MODES.push({
-    id: 13, key: 'light', icon: '🚦', timed: 0, cap: 50, view: { r: 420 }, live: '🏁', liveSuf: '%',
-    ru: { name: 'Светофор', goal: 'Беги к финишу, пока горит зелёный. Красный — замри! Кто двигается на красный, возвращается на старт.', btn: 'РЫВОК', hints: ['🟢 БЕГИ!', '🟡 Приготовься…', '🔴 СТОЙ! Не двигайся!'] },
-    en: { name: 'Red Light', goal: 'Run to the finish on green. Red — freeze! Anyone moving on red goes back to the start.', btn: 'DASH', hints: ['🟢 RUN!', '🟡 Get ready…', '🔴 STOP! Do not move!'] },
-    phys: { acc: 330, fric: 2.8, dashV: 230, dashT: 0.2, dashCD: 4 },
+    id: 13, key: 'light', icon: '🚦', timed: 0, cap: 140, view: { follow: true, zoom: 540 }, live: '🏁', liveSuf: '%',
+    ru: { name: 'Светофор', goal: 'Беги к финишу, пока горит зелёный. Красный — замри! Кто двигается на красный, возвращается на старт. Рывком можно толкать соперников!', btn: 'ТОЛЧОК', hints: ['🟢 БЕГИ!', '🟡 Приготовься…', '🔴 СТОЙ! Не двигайся!'] },
+    en: { name: 'Red Light', goal: 'Run to the finish on green. Red — freeze! Anyone moving on red goes back to the start. Dash into rivals to shove them!', btn: 'SHOVE', hints: ['🟢 RUN!', '🟡 Get ready…', '🔴 STOP! Do not move!'] },
+    phys: { acc: 330, fric: 2.8, dashV: 250, dashT: 0.2, dashCD: 2.2 },
     init(g) {
       g.ms = { l: 0, t: rr(2.4, 3.6), redT: 0, fin: [] };
       const parts = g.players.filter((p) => p.inRound).sort(() => Math.random() - 0.5), n = parts.length;
@@ -1087,7 +1087,12 @@
     },
     step(g, dt) {
       const ms = g.ms, alive = g.alive();
-      for (const p of alive) { g.integrate(p, dt); g.softWall(p, 430); }
+      const lim = LIGHT.AW - C.PR * 0.9;
+      for (const p of alive) {
+        g.integrate(p, dt);
+        if (p.x > lim) { p.x = lim; if (p.vx > 0) p.vx *= -0.4; } else if (p.x < -lim) { p.x = -lim; if (p.vx < 0) p.vx *= -0.4; }
+        if (p.y > LIGHT.Y0 + 70) { p.y = LIGHT.Y0 + 70; if (p.vy > 0) p.vy *= -0.4; } else if (p.y < LIGHT.Y1 - 150) { p.y = LIGHT.Y1 - 150; if (p.vy < 0) p.vy *= -0.4; }
+      }
       g.collideAll(alive);
       ms.t -= dt;
       if (ms.l === 0 && ms.t <= 0) { ms.l = 1; ms.t = 0.75; g.events.push(['warn']); }
@@ -1096,16 +1101,31 @@
       if (ms.l === 2) ms.redT += dt;
       for (const p of alive) {
         if (p.done) continue;
-        if (ms.l === 2 && ms.redT > 0.5 && Math.hypot(p.vx, p.vy) > 52) { p.y = LIGHT.Y0 + 10; p.vx = p.vy = 0; p.frozen = 0.7; g.events.push(['back', p.id, Math.round(p.x), Math.round(p.y)]); }
+        if (ms.l === 2 && ms.redT > 0.5 && Math.hypot(p.vx, p.vy) > 52 && g.time - (p.pushedT || -9) > 0.9) { p.y = LIGHT.Y0 + 10; p.vx = p.vy = 0; p.frozen = 0.7; g.events.push(['back', p.id, Math.round(p.x), Math.round(p.y)]); }
         p.a = clampN(Math.round(((LIGHT.Y0 - p.y) / (LIGHT.Y0 - LIGHT.Y1)) * 100), 0, 100);
         if (p.y < LIGHT.Y1) { ms.fin.push(p.id); p.fin = ms.fin.length; p.done = true; p.a = 100; p.in.x = p.in.y = 0; g.events.push(['finish', p.id, p.fin]); }
       }
       const left = alive.filter((p) => !p.fin);
       if (left.length === 0 || g.elapsed > this.cap) g.finishRound(ms.fin.concat(left.sort((a, b) => a.y - b.y).map((p) => p.id)));
     },
+    // рывок + толчок: соперники впереди отлетают (толкнутого на красный не наказывают)
+    onDash(g, p, dx, dy) {
+      const ph = this.phys; p.vx += dx * ph.dashV; p.vy += dy * ph.dashV; p.dash = ph.dashT; p.cd = 1.6;
+      for (const q of g.players) {
+        if (q === p || !q.alive || !q.inRound || q.done) continue;
+        const ex = q.x - p.x, ey = q.y - p.y, d = Math.hypot(ex, ey);
+        if (d < C.PR * 3.7 && d > 0 && (ex * dx + ey * dy) / d > 0) {
+          const imp = 560 / g.mass(q); q.vx += (ex / d) * imp + dx * imp * 0.5; q.vy += (ey / d) * imp + dy * imp * 0.5;
+          q.last = p.id; q.lastT = g.time; q.pushedT = g.time; q.stun = Math.max(q.stun || 0, 0.25);
+          g.events.push(['hit', Math.round((p.x + q.x) / 2), Math.round((p.y + q.y) / 2), 0.8, p.id, q.id]);
+        }
+      }
+      g.events.push(['dash', p.id]); return true;
+    },
     bot(g, p, dt) {
       const a = p.ai, ms = g.ms;
       if (p.done) { p.in.x = p.in.y = 0; return; }
+      if (ms.l === 0 && p.cd <= 0) { const nb = nearestAlive(g, p, (q) => !q.done); if (nb && nb.d < 105 && nb.q.y < p.y + 20 && Math.random() < dt * 1.6 * a.skill) p.dashReq = true; }
       if (ms.l === 0) { a.stopAt = null; steer(p, p.x * 0.96, LIGHT.Y1 - 40, a.skill); if (a.wantDash == null) a.wantDash = false; a.t -= dt; if (a.t <= 0) { a.t = 0.4; a.wantDash = Math.random() < a.dashP * 0.5; } if (a.wantDash && p.cd <= 0 && p.y > LIGHT.Y1 + 150) { p.dashReq = true; a.wantDash = false; } }
       else if (ms.l === 1) { if (a.stopAt == null) a.stopAt = Math.random() * 0.62 / (a.react || 1); a.stopAt -= dt; if (a.stopAt > 0) steer(p, p.x * 0.96, LIGHT.Y1 - 40, a.skill); else { p.in.x = p.in.y = 0; } }
       else { p.in.x = p.in.y = 0; }
