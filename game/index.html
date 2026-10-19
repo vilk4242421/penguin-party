@@ -15,7 +15,9 @@
 :root{--ice:#e8f8ff;--deep:#0b3d6b;--accent:#ff9f1c;--good:#37d67a;--bad:#ff5d5d;
   --font:"Trebuchet MS","Arial Rounded MT Bold","Segoe UI",system-ui,sans-serif;}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-html,body{margin:0;height:100%;overflow:hidden;background:#0b3d6b;font-family:var(--font);color:#fff;overscroll-behavior:none;touch-action:none}
+html,body{margin:0;height:100%;overflow:hidden;background:#0b3d6b;font-family:var(--font);font-weight:800;color:#fff;overscroll-behavior:none;touch-action:none}
+body *:not(h1){font-weight:800!important}
+input,textarea,select,button{font-weight:800!important}
 #c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
 .hide{display:none!important}
 button{font-family:inherit;cursor:pointer;border:0;color:inherit}
@@ -27,7 +29,7 @@ input{font-family:inherit;-webkit-user-select:text;user-select:text}
 .card{width:min(440px,100%);margin:auto;text-align:center;padding:16px 16px 14px;border-radius:26px;
   background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.08));border:2px solid rgba(255,255,255,.35);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 12px 40px rgba(0,20,50,.5)}
-h1{margin:0;font-size:clamp(22px,6vw,32px);text-wrap:balance;line-height:1.1;letter-spacing:.5px;text-shadow:0 3px 0 #0a2f55,0 0 18px rgba(120,210,255,.6)}
+h1{font-weight:700;margin:0;position:relative;top:9px;font-size:20px;white-space:nowrap;line-height:1.1;letter-spacing:.5px;text-shadow:0 3px 0 #0a2f55,0 0 18px rgba(120,210,255,.6)}
 h2{margin:0 0 8px;font-size:24px;text-shadow:0 2px 0 #0a2f55}
 .tag{margin:2px 0 8px;opacity:.9;font-size:15px}
 .prev{display:block;margin:0 auto;width:120px;height:120px}
@@ -238,7 +240,7 @@ body.fin #toasts{top:100px;left:8px;right:auto;align-items:flex-start;max-width:
 #lobby .opts button.cfgb{background:linear-gradient(180deg,#46b6ff,#1f7fd6)}
 @media (max-height:560px){#modeGrid{grid-template-columns:repeat(4,1fr)}.mcard b{font-size:22px}#ckCv{width:200px;height:200px}}
 @media (max-width:620px){#modeTag{top:44px}#timer{top:68px}}
-.byline{margin:-4px 0 10px;text-align:center;font-weight:700;font-size:15px;letter-spacing:normal;opacity:.85}
+.byline{position:relative;top:9px;margin:4px 0 10px;text-align:center;font-weight:800;font-size:15px;letter-spacing:normal;opacity:.85}
 </style>
 </head>
 <body>

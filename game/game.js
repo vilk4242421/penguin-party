@@ -91,12 +91,24 @@ let lang = ls.get('lang', null);
 if (!lang) { const l = (navigator.language || 'ru').slice(0, 2).toLowerCase(); lang = ['ru', 'uk', 'be', 'kk', 'uz', 'tg', 'hy', 'az', 'ky'].includes(l) ? 'ru' : 'en'; }
 const T = (k, ...a) => { const v = (L[lang] && L[lang][k]) ?? L.en[k] ?? k; return typeof v === 'function' ? v(...a) : v; };
 const MT = (id) => MODES[id][lang];
+// название и подзаголовок: одна строка, размер подбирается под ширину карточки
+function fitTitle() {
+  for (const [el, max, min] of [[document.querySelector('#menu h1'), 20, 12]]) {
+    if (!el) continue;
+    el.style.whiteSpace = 'nowrap'; el.style.fontSize = max + 'px';
+    const room = el.parentElement.clientWidth - 32;
+    if (room <= 0) continue;
+    let s = max; while (s > min && el.scrollWidth > room) { s -= 0.5; el.style.fontSize = s + 'px'; }
+  }
+}
+window.addEventListener('resize', () => fitTitle());
 function applyLang() {
   document.documentElement.lang = lang;
   document.querySelectorAll('[data-t]').forEach((el) => { el.innerHTML = T(el.dataset.t); });
   document.querySelectorAll('[data-ph]').forEach((el) => { el.placeholder = T(el.dataset.ph); });
   $('bLang').textContent = lang.toUpperCase();
   document.title = T('title');
+  fitTitle();
   if (typeof renderDiff === 'function') renderDiff();
 }
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
