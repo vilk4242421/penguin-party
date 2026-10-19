@@ -66,8 +66,11 @@ const server = http.createServer((req, res) => {
   if (url === '/stats') {
     let players = 0;
     for (const r of rooms.values()) players += r.clients.size;
-    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
-    return res.end(JSON.stringify({ players, rooms: rooms.size, proto: Sim.C.PROTO, version: Sim.C.VERSION, build: BUILD, store: accounts.getStore().kind }));
+    accounts.getStore().count().catch(() => -1).then((n) => {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ players, rooms: rooms.size, proto: Sim.C.PROTO, version: Sim.C.VERSION, build: BUILD, store: accounts.getStore().kind, accounts: n }));
+    });
+    return;
   }
   if (url === '/health') { res.writeHead(200); return res.end('ok'); }
   let file = path.normalize(path.join(GAME_DIR, url === '/' ? 'index.html' : url));
