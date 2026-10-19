@@ -1,5 +1,5 @@
 /* Пингвины — симулятор кликов: жми на пингвина, копи рыбу, улучшай силу клика и клики в секунду.
- * За набор рыбы пингвин получает новый облик. Прохождение (80 000 🐟) = уникальный цвет и шляпа в гардероб. */
+ * За набор рыбы пингвин получает новый облик. Прохождение (80 000 🐟 на балансе) = уникальный цвет и шляпа в гардероб. */
 (function (root) {
   'use strict';
   const Pro = root.Profile, Cos = root.Cosmetics, Sc = root.Scene, GA = root.GameAudio;
@@ -7,20 +7,20 @@
   const TXT = {
     ru: {
       title: 'Рыбный симулятор', tapMe: 'Жми на пингвина!', perTap: 'за клик', perSec: 'в секунду', power: 'Сила клика', auto: 'Клики в секунду', lvl: 'ур.', max: 'МАКС',
-      next: (n, v) => `Следующий облик «${n}» — ${v} 🐟`, last: 'Финал — получи награду!', goal: (v) => `Цель симулятора: ${v} 🐟`, stageUp: 'Новый облик',
-      done: '🎉 Симулятор пройден!', doneTxt: 'Ты получил уникальный цвет «Северное сияние» и «Шляпу-рыбу». Они уже в гардеробе — и надеты на тебя!', toWard: 'В гардероб', goOn: 'Продолжить кликать',
+      next: (n, v) => `Следующий облик «${n}» — ${v} 🐟`, last: 'Финал — получи награду!', goal: (v) => `Цель: накопить ${v} 🐟 на балансе (не трать!)`, stageUp: 'Новый облик',
+      done: '🎉 Симулятор пройден!', doneTxt: 'Ты получил уникальный цвет «Северное сияние» и «Радужную корону». Они уже в гардеробе — и надеты на тебя!', toWard: 'В гардероб', goOn: 'Продолжить кликать',
       reward: 'Награда за прохождение: уникальный цвет и шляпа', back: 'Назад', total: 'Всего',
     },
     en: {
       title: 'Fish Simulator', tapMe: 'Tap the penguin!', perTap: 'per tap', perSec: 'per second', power: 'Tap power', auto: 'Taps per second', lvl: 'lv.', max: 'MAX',
-      next: (n, v) => `Next look “${n}” — ${v} 🐟`, last: 'Final stretch — claim your reward!', goal: (v) => `Simulator goal: ${v} 🐟`, stageUp: 'New look',
-      done: '🎉 Simulator complete!', doneTxt: 'You got the unique “Aurora” color and the “Fish hat”. They are in your wardrobe and already on!', toWard: 'To wardrobe', goOn: 'Keep tapping',
+      next: (n, v) => `Next look “${n}” — ${v} 🐟`, last: 'Final stretch — claim your reward!', goal: (v) => `Goal: hold ${v} 🐟 on your balance (don't spend!)`, stageUp: 'New look',
+      done: '🎉 Simulator complete!', doneTxt: 'You got the unique “Aurora” color and the “Rainbow crown”. They are in your wardrobe and already on!', toWard: 'To wardrobe', goOn: 'Keep tapping',
       reward: 'Completion reward: unique color and hat', back: 'Back', total: 'Total',
     },
   };
   let H = { lang: () => 'ru', toast: () => {}, refresh: () => {}, wardrobe: () => {} };
   let cv, ctx, W = 300, Hh = 300, D = 1;
-  let pulse = 0, acc = 0, uiT = 0, saveT = 0, lastStage = -1, fl = [];
+  let sq = 0, sv = 0, hop = 0, hv = 0, tl = 0, tv = 0, cheerS = 0, pulse = 0, acc = 0, uiT = 0, saveT = 0, lastStage = -1, fl = [];
   const T = (k, ...a) => { const v = TXT[H.lang()][k]; return typeof v === 'function' ? v(...a) : v; };
   const fmt = (n) => { n = Math.floor(n); if (n < 10000) return String(n); if (n < 1e6) return (n / 1000).toFixed(n < 100000 ? 1 : 0).replace(/\.0$/, '') + 'k'; return (n / 1e6).toFixed(2) + 'M'; };
   const K = () => Pro.CLK, S = () => Pro.P.clk;
@@ -45,18 +45,18 @@
     checkProgress();
   }
   function tap(x, y, auto) {
-    pulse = 1; GA.play('tap');
+    pulse = 1; GA.play('tap'); if (!auto) { sv += 7; hv += 2.4; tv += (x / W - 0.5) * 6; }
     gain(K().power(), x, y, auto);
     saveT = 1.2;
   }
   function checkProgress() {
     const c = S(), st = K().stage();
     if (lastStage >= 0 && st > lastStage) {
-      GA.play('ach'); H.toast(`🐧 ${T('stageUp')}: <b>${K().NAMES[st][H.lang() === 'ru' ? 0 : 1]}</b>`); pulse = 1.6;
+      GA.play('ach'); H.toast(`🐧 ${T('stageUp')}: <b>${K().NAMES[st][H.lang() === 'ru' ? 0 : 1]}</b>`); pulse = 1.6; sv += 12; hv += 5;
       for (let i = 0; i < 12; i++) fl.push({ x: W / 2 + (Math.random() - 0.5) * 120, y: Hh * 0.5, v: 0, life: 1.2, vx: (Math.random() - 0.5) * 120, e: '⭐' });
     }
     lastStage = st;
-    if (c.total >= K().GOAL && !c.done) {
+    if (c.fish >= K().GOAL && !c.done) {
       if (Pro.clickerReward()) { GA.play('win'); $('ckDone').classList.remove('hide'); H.refresh(); }
     }
   }
@@ -72,8 +72,8 @@
     const c = S(), k = K(), st = k.stage();
     $('ckTitle').textContent = '🐟 ' + T('title');
     $('ckFish').textContent = '🐟 ' + fmt(c.fish);
-    const per = k.power(), ps = c.la * per;
-    $('ckInfo').textContent = `+${fmt(per)} ${T('perTap')}  ·  +${fmt(ps)} ${T('perSec')}`;
+    const per = k.power(), ps = k.income();
+    $('ckInfo').textContent = `+${fmt(per)} ${T('perTap')}  ·  +${ps < 10 ? ps.toFixed(1).replace(/\.0$/, '') : fmt(ps)} ${T('perSec')}`;
     const set = (id, w, name) => {
       const lv = w === 'p' ? c.lp : c.la, cost = w === 'p' ? k.costP(lv) : k.costA(lv), el = $(id), max = lv >= k.MAXL;
       el.innerHTML = `<b>${name}</b> <small>${T('lvl')} ${lv}</small><span>${max ? T('max') : '🐟 ' + fmt(cost)}</span>`;
@@ -82,11 +82,11 @@
     set('ckUpP', 'p', '👆 ' + T('power')); set('ckUpA', 'a', '⏱ ' + T('auto'));
     const nxt = st < k.STAGES.length - 1 ? k.STAGES[st + 1] : k.GOAL;
     const prev = k.STAGES[st];
-    const frac = c.done && st >= k.STAGES.length - 1 ? 1 : Math.max(0, Math.min(1, (c.total - prev) / (nxt - prev)));
+    const frac = c.done && st >= k.STAGES.length - 1 ? 1 : st < k.STAGES.length - 1 ? Math.max(0, Math.min(1, (c.total - prev) / (nxt - prev))) : Math.max(0, Math.min(1, c.fish / k.GOAL));
     $('ckBar').style.width = Math.round(frac * 100) + '%';
     const nm = st < k.STAGES.length - 1 ? k.NAMES[st + 1][H.lang() === 'ru' ? 0 : 1] : '';
     $('ckNext').textContent = st < k.STAGES.length - 1 ? T('next', nm, fmt(nxt)) : (c.done ? T('reward') : T('last'));
-    $('ckGoal').textContent = c.done ? '✅ ' + T('reward') : T('goal', fmt(k.GOAL)) + ` · ${T('total')}: ${fmt(c.total)}`;
+    $('ckGoal').textContent = c.done ? '✅ ' + T('reward') : T('goal', fmt(k.GOAL)) + ` · ${fmt(c.fish)}`;
     $('ckStage').textContent = k.NAMES[st][H.lang() === 'ru' ? 0 : 1];
     $('ckDoneT').textContent = T('done'); $('ckDoneP').textContent = T('doneTxt'); $('bCkDoneW').textContent = '👗 ' + T('toWard'); $('bCkDoneC').textContent = T('goOn');
     $('bCkBack').textContent = T('back');
@@ -96,14 +96,23 @@
 
   function frame(now, dt) {
     const c = S(), k = K();
-    if (c.la > 0) { acc += c.la * dt; while (acc >= 1) { acc -= 1; gain(k.power(), W / 2 + (Math.random() - 0.5) * 80, Hh * 0.45, true); pulse = Math.max(pulse, 0.55); } }
+    if (c.la > 0) { acc += k.income() * dt; if (acc >= 1) { const n = Math.floor(acc); acc -= n; gain(n, W / 2 + (Math.random() - 0.5) * 80, Hh * 0.45, true); pulse = Math.max(pulse, 0.45); sv += 2.2; hv += 0.8; } }
     if (saveT > 0) { saveT -= dt; if (saveT <= 0) { Pro.save(); Pro.checkAch(); } }
     uiT -= dt; if (uiT <= 0) { uiT = 0.2; build(); }
-    pulse = Math.max(0, pulse - dt * 4);
+    pulse = Math.max(0, pulse - dt * 2.2);
+    // пружины: сплющивание, подпрыгивание, наклон (с подшагами, чтобы не «взрывались»)
+    const n = Math.max(1, Math.ceil(dt / 0.008)), h = dt / n;
+    for (let i = 0; i < n; i++) {
+      sv += (-190 * sq - 15 * sv) * h; sq += sv * h;
+      hv += (-120 * hop - 11 * hv) * h; hop += hv * h; if (hop < 0) { hop = 0; if (hv < 0) hv *= -0.25; }
+      tv += (-90 * tl - 9 * tv) * h; tl += tv * h;
+    }
+    cheerS += ((pulse > 0.35 ? 1 : 0) - cheerS) * Math.min(1, dt * 6);
     ctx.setTransform(D, 0, 0, D, 0, 0); ctx.clearRect(0, 0, W, Hh);
     const look = Object.assign({}, k.LOOKS[k.stage()]);
-    // кликер показывает облик стадии, а прошедшим симулятор — свою экипировку по умолчанию не подменяет
-    Sc.drawStage(ctx, W, Hh, look, now, { u: Hh * 0.3, squash: 1 - 0.09 * Math.min(1, pulse) + 0.05 * Math.sin(now / 400), cheer: pulse > 0.4 });
+    const br = Math.sin(now / 520) * 0.018; // дыхание
+    const sqz = Math.max(-0.25, Math.min(0.3, sq * 0.05 + br));
+    Sc.drawStage(ctx, W, Hh, look, now, { u: Hh * 0.3, sx: 1 + sqz * 0.8, sy: 1 - sqz, lift: hop * Hh * 0.035, rot: tl * 0.05, cheer: cheerS > 0.5 });
     for (let i = fl.length - 1; i >= 0; i--) {
       const f = fl[i]; f.life -= dt; if (f.life <= 0) { fl.splice(i, 1); continue; }
       f.y -= 70 * dt; f.x += f.vx * dt; ctx.globalAlpha = Math.min(1, f.life * 2);

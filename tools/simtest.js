@@ -21,7 +21,7 @@ function runMode(mid) {
         if (sum !== n * (n - 1) / 2) fail('points sum ' + sum + ' for n=' + n);
         if (res[0][2] !== n - 1) fail('winner pts');
         if (new Set(res.map((r) => r[0])).size !== n) fail('dup ids in results');
-        if (n !== 5) fail('participants ' + n);
+        if (n !== (g.mode.key === 'tanks' ? 4 : 5)) fail('participants ' + n);
       }
     }
     g.events.length = 0;

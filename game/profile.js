@@ -18,23 +18,26 @@
 
   /* ---------- кликер: параметры ---------- */
   const CLK = {
-    GOAL: 80000, MAXL: 20,
-    STAGES: [0, 300, 3000, 20000, 80000],
+    GOAL: 80000, MAXL: 25,
+    STAGES: [0, 2500, 12000, 35000, 65000],
     LOOKS: [
       { c: 4, p: 0, h: 0, e: 0, t: 0, s: 0 }, { c: 5, p: 0, h: 1, e: 0, t: 0, s: 0 }, { c: 0, p: 1, h: 0, e: 1, t: 0, s: 0 },
       { c: 15, p: 0, h: 13, e: 0, t: 0, s: 0 }, { c: 16, p: 0, h: 15, e: 0, t: 0, s: 0 },
     ],
     NAMES: [['Малыш', 'Little one'], ['Рыбак', 'Fisher'], ['Крутой', 'Cool one'], ['Чемпион', 'Champion'], ['Легенда льдов', 'Ice legend']],
-    costP: (l) => Math.floor(12 * Math.pow(1.5, l)),
-    costA: (l) => Math.floor(40 * Math.pow(1.55, l)),
+    costP: (l) => Math.floor(25 * Math.pow(1.55, l)),
+    costA: (l) => Math.floor(120 * Math.pow(1.6, l)),
     power: () => 1 + P.clk.lp,
+    // авто-клики слабее ручных: уровень даёт 0.3 клика/с, и каждый приносит лишь часть силы клика
+    autoRate: () => P.clk.la * 0.3,
+    income: () => P.clk.la * 0.3 * (1 + P.clk.lp * 0.2),
     stage: () => { let s = 0; for (let i = 0; i < CLK.STAGES.length; i++) if (P.clk.total >= CLK.STAGES[i]) s = i; return s; },
   };
 
   /* ---------- секретные коды (хранятся только хэши) ---------- */
   const norm = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
   const fnv = (s) => { let h = 0x811c9dc5; for (const ch of s) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16); };
-  const CODES = { '12809762': { slot: 's', idx: 1, id: 'veriti' } };
+  const CODES = { '12809762': { slot: 's', idx: 1, id: 'veriti' }, 'bc164324': { slot: 's', idx: 2, id: 'lutikov' }, '257bb5e5': { slot: 's', idx: 3, id: 'rbveriti' } };
 
   function load() {
     try {
@@ -44,6 +47,7 @@
         P = Object.assign(d, o);
         P.look = Object.assign(DEF().look, o.look); P.stats = Object.assign(DEF().stats, o.stats); P.opts = Object.assign(DEF().opts, o.opts);
         P.owned = Object.assign(DEF().owned, o.owned); P.clk = Object.assign(DEF().clk, o.clk); P.codes = o.codes || {};
+        if (P.clk.done && !P.owned.h.includes(31)) P.owned.h.push(31); // прошедшие симулятор получают радужную корону
       } else {
         const old = (k, d) => { try { const v = localStorage.getItem('ps_' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } };
         P.name = old('name', ''); P.opts.sound = old('sound', true);
@@ -113,7 +117,7 @@
   /* ---------- кликер ---------- */
   function clickerReward() { // за прохождение симулятора: уникальный цвет и шляпа
     if (P.clk.done) return false;
-    P.clk.done = 1; unlock('c', 16); unlock('h', 15); P.look.c = 16; P.look.h = 15; save(); checkAch(); return true;
+    P.clk.done = 1; unlock('c', 16); unlock('h', 31); P.look.c = 16; P.look.h = 31; save(); checkAch(); return true;
   }
 
   /* ---------- коды ---------- */

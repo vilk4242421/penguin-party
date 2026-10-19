@@ -16,7 +16,7 @@ const MAX_CONN_PER_IP = 12;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json',
-  '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon',
 };
 
 // «версия сборки» = хэш всех файлов игры; подставляется в sw.js, чтобы клиенты обновлялись сами после каждого деплоя
@@ -123,7 +123,8 @@ wss.on('connection', (ws, req) => {
     if (m.t === 'join' && !ws.room) {
       if ((m.v | 0) !== Sim.C.PROTO) return send(ws, { t: 'err', e: 'old' });
       let room = null;
-      const qcfg = { kind: m.kind ? 1 : 0, len: [1, 3, 5, 7].includes(m.len | 0) ? m.len | 0 : 3, mode: m.gm | 0, bots: m.bots === 0 ? 0 : 1 };
+      const qpicks = Array.isArray(m.picks) ? m.picks.slice(0, 10).map((v) => v | 0).filter((v, i, a) => v >= 0 && v < Sim.C.N_MODES && a.indexOf(v) === i) : [];
+      const qcfg = { kind: m.kind === 2 && qpicks.length ? 2 : m.kind ? 1 : 0, picks: qpicks, len: [1, 3, 5, 7].includes(m.len | 0) ? m.len | 0 : 3, mode: m.gm | 0, bots: m.bots === 0 ? 0 : 1, diff: [0, 1, 2].includes(m.diff | 0) ? m.diff | 0 : 1 };
       if (m.mode === 'create') room = createRoom(false, { bots: 0 });
       else if (m.mode === 'code') {
         room = rooms.get(String(m.code || '').toUpperCase().trim());
