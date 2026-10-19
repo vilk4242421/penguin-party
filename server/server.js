@@ -232,4 +232,4 @@ setInterval(() => {
   }
 }, 10000);
 
-server.listen(PORT, () => { console.log('Penguin Sumo server on :' + PORT + ' build ' + BUILD); console.log('Хранилище аккаунтов: ' + accounts.getStore().kind + (accounts.getStore().kind === 'file' ? ' (на бесплатном Render пропадёт при перезапуске — задайте DATABASE_URL)' : '')); });
+server.listen(PORT, () => { accounts.getStore().count().then((n) => console.log('Аккаунтов в хранилище: ' + n)).catch((e) => console.error('Хранилище аккаунтов недоступно:', e.message)); console.log('Penguin Sumo server on :' + PORT + ' build ' + BUILD); console.log('Хранилище аккаунтов: ' + accounts.getStore().kind + (accounts.getStore().kind === 'file' ? ' (на бесплатном Render пропадёт при перезапуске — задайте DATABASE_URL)' : '')); });

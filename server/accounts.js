@@ -22,13 +22,16 @@ function fileStore() {
 }
 function pgStore(url) {
   const { Pool } = require('pg');
-  const pool = new Pool({ connectionString: url, ssl: /localhost|127\.0\.0\.1/.test(url) ? false : { rejectUnauthorized: false } });
-  const ready = pool.query('CREATE TABLE IF NOT EXISTS accounts (name TEXT PRIMARY KEY, data JSONB NOT NULL)');
+  const pool = new Pool({ connectionString: url, ssl: /localhost|127\.0\.0\.1/.test(url) ? false : { rejectUnauthorized: false }, max: 5, idleTimeoutMillis: 10000, connectionTimeoutMillis: 15000 });
+  // Neon «засыпает» и рвёт неиспользуемые соединения — без обработчика Node падает и сервер перезапускается
+  pool.on('error', (e) => console.error('pg pool:', e.message));
+  const ready = pool.query('CREATE TABLE IF NOT EXISTS accounts (name TEXT PRIMARY KEY, data JSONB NOT NULL)').catch((e) => { console.error('pg init:', e.message); });
+  const run = async (sql, args) => { await ready; try { return await pool.query(sql, args); } catch (e) { return pool.query(sql, args); } }; // одна повторная попытка после обрыва
   return {
     kind: 'postgres',
-    async get(k) { await ready; const r = await pool.query('SELECT data FROM accounts WHERE name=$1', [k]); return r.rows[0] ? r.rows[0].data : null; },
-    async set(k, v) { await ready; await pool.query('INSERT INTO accounts(name,data) VALUES($1,$2) ON CONFLICT (name) DO UPDATE SET data=$2', [k, JSON.stringify(v)]); },
-    async count() { await ready; return +(await pool.query('SELECT COUNT(*) FROM accounts')).rows[0].count; },
+    async get(k) { const r = await run('SELECT data FROM accounts WHERE name=$1', [k]); return r.rows[0] ? r.rows[0].data : null; },
+    async set(k, v) { await run('INSERT INTO accounts(name,data) VALUES($1,$2::jsonb) ON CONFLICT (name) DO UPDATE SET data=$2::jsonb', [k, JSON.stringify(v)]); },
+    async count() { const r = await run("SELECT COUNT(*) FROM accounts WHERE name NOT LIKE 'ip:%'"); return +r.rows[0].count; },
     flush() {},
   };
 }
