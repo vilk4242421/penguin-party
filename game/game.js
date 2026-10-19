@@ -19,7 +19,7 @@ const ls = {
 /* ================= локализация ================= */
 const L = {
   ru: {
-    title: 'Пингвины', tag: 'Турниры, гонки и сумо на льдинах!', yourName: 'Твоё имя',
+    title: 'Пингвины: Ледяная арена', tag: 'Скользи, толкай, побеждай!', yourName: 'Твоё имя',
     online: 'Играть онлайн', onlineSub: 'Быстрый турнир с живыми игроками', tournament: 'Турнир', modes: 'Режимы', friends: 'С друзьями (по коду)',
     create: 'Создать комнату', join: 'Войти', offline: 'Против ботов', offlineSub: 'Без интернета — быстрый турнир', install: '📲 Установить',
     clicker: 'Симулятор', wardrobe: 'Гардероб', achievements: 'Награды', settings: 'Настройки', back: 'Назад',
@@ -53,7 +53,7 @@ const L = {
     kingHint: '👑 Лови того, у кого корона!', youCrown: '👑 КОРОНА У ТЕБЯ! Убегай!', wait2: 'Ждём соперников…',
   },
   en: {
-    title: 'Penguins', tag: 'Tournaments, races and sumo on ice!', yourName: 'Your name',
+    title: 'Penguins: Ice Arena', tag: 'Slide, shove, win!', yourName: 'Your name',
     online: 'Play online', onlineSub: 'Quick tournament with real players', tournament: 'Tournament', modes: 'Modes', friends: 'With friends (room code)',
     create: 'Create room', join: 'Join', offline: 'Vs bots', offlineSub: 'No internet — quick tournament', install: '📲 Install',
     clicker: 'Simulator', wardrobe: 'Wardrobe', achievements: 'Awards', settings: 'Settings', back: 'Back',

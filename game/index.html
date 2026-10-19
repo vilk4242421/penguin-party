@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Пингвины</title>
+<title>Пингвины: Ледяная арена</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -27,7 +27,7 @@ input{font-family:inherit;-webkit-user-select:text;user-select:text}
 .card{width:min(440px,100%);margin:auto;text-align:center;padding:16px 16px 14px;border-radius:26px;
   background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.08));border:2px solid rgba(255,255,255,.35);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 12px 40px rgba(0,20,50,.5)}
-h1{margin:0;font-size:clamp(28px,7vw,38px);letter-spacing:.5px;text-shadow:0 3px 0 #0a2f55,0 0 18px rgba(120,210,255,.6)}
+h1{margin:0;font-size:clamp(22px,6vw,32px);text-wrap:balance;line-height:1.1;letter-spacing:.5px;text-shadow:0 3px 0 #0a2f55,0 0 18px rgba(120,210,255,.6)}
 h2{margin:0 0 8px;font-size:24px;text-shadow:0 2px 0 #0a2f55}
 .tag{margin:2px 0 8px;opacity:.9;font-size:15px}
 .prev{display:block;margin:0 auto;width:120px;height:120px}
@@ -247,9 +247,9 @@ body.fin #toasts{top:100px;left:8px;right:auto;align-items:flex-start;max-width:
 <div id="menu" class="screen">
   <div class="card">
     <canvas id="prev" class="prev" width="260" height="260" style="width:130px;height:130px"></canvas>
-    <h1 data-t="title">Пингвины</h1><div class="byline">By Rybkis</div>
+    <h1 data-t="title">Пингвины: Ледяная арена</h1><div class="byline">By Rybkis</div>
     <div class="menuacc hide" id="menuAcc"></div>
-    <p class="tag" data-t="tag">Турниры, гонки и сумо на льдинах!</p>
+    <p class="tag" data-t="tag">Скользи, толкай, побеждай!</p>
     <input id="name" maxlength="14" autocomplete="off" data-ph="yourName" placeholder="Твоё имя">
     <div class="lvlbar"><span id="lvlTxt"></span><div class="bar"><i id="lvlFill"></i></div><b id="coinsTxt"></b></div>
     <button class="btn main" id="bOnline"><span data-t="online">Играть онлайн</span><small data-t="onlineSub">Быстрый турнир с живыми игроками</small></button>
