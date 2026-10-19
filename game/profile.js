@@ -183,6 +183,8 @@
   function apiBase() {
     const u = (root.GAME_CONFIG && root.GAME_CONFIG.SERVER_URL) || '';
     if (u) return u.replace(/^ws/, 'http').replace(/\/+$/, '');
+    const fb = root.GAME_CONFIG && root.GAME_CONFIG.FALLBACK_SERVER, L = root.location;
+    if (fb && L && (!/^https?:$/.test(L.protocol) || (L.hostname === 'localhost' && !L.port))) return fb.replace(/^ws/, 'http').replace(/\/+$/, '');
     return root.location && /^https?:/.test(root.location.protocol) ? root.location.origin : '';
   }
   async function redeem(code) {

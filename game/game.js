@@ -160,6 +160,7 @@ const net = { ws: null, snaps: [], me: null, ping: 0, lastSent: 0, lastIn: '', t
 function serverBase() {
   const q = new URLSearchParams(location.search).get('server');
   let u = q || (window.GAME_CONFIG && window.GAME_CONFIG.SERVER_URL) || '';
+  if (!u && window.GAME_CONFIG && window.GAME_CONFIG.FALLBACK_SERVER && !/^https?:$/.test(location.protocol) || (!u && location.hostname === 'localhost' && !location.port && window.GAME_CONFIG && window.GAME_CONFIG.FALLBACK_SERVER)) u = window.GAME_CONFIG.FALLBACK_SERVER;
   if (!u) {
     if (location.protocol === 'file:') return '';
     if (/yandex\.(net|ru|com)$/.test(location.hostname)) return '';
@@ -515,7 +516,7 @@ function startOffline(c) {
   c = Object.assign({ kind: 0, len: 3, mode: 0, chaos: 0, diff: diffSel }, c || {}, { bots: 1 });
   game = new Game({ lobby: false });
   game.applyCfg(c);
-  const p = game.addPlayer(P.name || 'Penguin', lookNow(), false);
+  const p = game.addPlayer(P.name || 'Penguin', lookNow(), false); p.adm = !!(Pro.Acc.token && Pro.Acc.admin);
   myId = p.id; roster = new Map(); game.startMatch();
   startPlay('offline');
 }
@@ -1089,6 +1090,7 @@ function initMenu() {
     if (r.recovery) $('accMsg').textContent = '🔑 ' + T('accRecShow', r.recovery);
   }
   $('bAccLogin').onclick = () => accGo('login'); $('bAccReg').onclick = () => accGo('reg');
+  $('bAccOut').onclick = async () => { GA.play('click'); try { await Pro.syncNow(); } catch (e) {} await Pro.logout(); accReset = false; $('accMsg').textContent = ''; renderAcc(); };
   $('accPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') accGo('login'); });
   $('bSBack').onclick = () => { GA.play('click'); showScreen('menu'); };
   for (const [id, k] of [['tSfx', 'sound'], ['tMusic', 'music'], ['tVibe', 'vibe']]) $(id).onclick = () => { P.opts[k] = !P.opts[k]; Pro.save(); syncToggles(); GA.play('click'); };

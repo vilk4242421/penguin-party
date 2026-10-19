@@ -16,7 +16,8 @@ function fileStore() {
     kind: 'file',
     async get(k) { return db[k] ? JSON.parse(JSON.stringify(db[k])) : null; },
     async set(k, v) { db[k] = v; if (!timer) timer = setTimeout(flush, 800); },
-    async count() { return Object.keys(db).length; },
+    async count() { return Object.keys(db).filter((n) => !n.startsWith('ip:')).length; },
+    async names() { return Object.keys(db).filter((n) => !n.startsWith('ip:')); },
     flush,
   };
 }
@@ -32,6 +33,7 @@ function pgStore(url) {
     async get(k) { const r = await run('SELECT data FROM accounts WHERE name=$1', [k]); return r.rows[0] ? r.rows[0].data : null; },
     async set(k, v) { await run('INSERT INTO accounts(name,data) VALUES($1,$2::jsonb) ON CONFLICT (name) DO UPDATE SET data=$2::jsonb', [k, JSON.stringify(v)]); },
     async count() { const r = await run("SELECT COUNT(*) FROM accounts WHERE name NOT LIKE 'ip:%'"); return +r.rows[0].count; },
+    async names() { const r = await run("SELECT name FROM accounts WHERE name NOT LIKE 'ip:%'"); return r.rows.map((x) => x.name); },
     flush() {},
   };
 }
@@ -107,17 +109,18 @@ async function handle(req, res, url, send) {
     const name = String(body.name || '').trim(), pw = String(body.pass || '');
     if (!validName(name)) return send(200, { ok: false, e: 'name' });
     if (pw.length < 6 || pw.length > 64) return send(200, { ok: false, e: 'pass' });
-    if (await st.get(keyOf(name))) return send(200, { ok: false, e: 'taken' });
+    if (await st.get(keyOf(name))) { console.log('[acc] register: ник занят', keyOf(name)); return send(200, { ok: false, e: 'taken' }); }
     const salt = crypto.randomBytes(16).toString('hex'), token = newToken(), rec = newRecovery();
     const acc = { name, salt, hash: hashPass(pw, salt), rec: sha(rec.replace(/-/g, '')), tokens: [sha(token)], profile: null, t: Date.now(), made: Date.now(), bonusC: 0 };
-    await st.set(keyOf(name), acc);
+    await st.set(keyOf(name), acc); console.log('[acc] register: создан', keyOf(name), 'store=' + st.kind);
     return send(200, { ok: true, token, name, recovery: rec, profile: null, admin: ADMINS.includes(keyOf(name)), nAdm: ADMINS.length });
   }
   if (url === '/api/login' && req.method === 'POST') {
     const name = String(body.name || '').trim(), k = keyOf(name);
     if (limited('log:' + ip, 15, 10 * 60 * 1000) || limited('loga:' + k, 8, 10 * 60 * 1000)) return send(429, { ok: false, e: 'wait' });
     const acc = await st.get(k);
-    if (!acc || !eq(hashPass(String(body.pass || ''), acc.salt), acc.hash)) return send(200, { ok: false, e: 'creds' });
+    if (!acc || !eq(hashPass(String(body.pass || ''), acc.salt), acc.hash)) { console.log('[acc] login: отказ', JSON.stringify(k), acc ? 'аккаунт есть, пароль не подошёл' : 'аккаунта с таким ником нет'); return send(200, { ok: false, e: 'creds' }); }
+    console.log('[acc] login: ок', k);
     const token = newToken(); acc.tokens = arr(acc.tokens).slice(-7).concat(sha(token)); await st.set(k, acc);
     return send(200, { ok: true, token, name: acc.name, profile: acc.profile, admin: ADMINS.includes(k), nAdm: ADMINS.length });
   }
@@ -134,7 +137,7 @@ async function handle(req, res, url, send) {
   // дальше нужен токен
   const tk = bearer(req); let acc = null, k = '';
   if (tk) { k = keyOf(safeDec(req.headers['x-account'] || '')); acc = k ? await st.get(k) : null; if (acc && !arr(acc.tokens).includes(sha(tk))) acc = null; }
-  if (!acc) return send(401, { ok: false, e: 'auth' });
+  if (!acc) { console.log('[acc] 401', JSON.stringify(k), tk ? 'токен не подошёл или нет аккаунта' : 'нет токена'); return send(401, { ok: false, e: 'auth' }); }
 
   if (url === '/api/profile' && req.method === 'GET') return send(200, { ok: true, name: acc.name, profile: acc.profile, v: acc.v || 0, admin: ADMINS.includes(k), nAdm: ADMINS.length });
   if (url === '/api/profile' && req.method === 'PUT') {
@@ -165,4 +168,19 @@ async function isAdmin(accIn) {
     return !!(acc && arr(acc.tokens).includes(sha(accIn.token)));
   } catch (e) { return false; }
 }
-module.exports = { handle, getStore, codeId, isAdmin };
+/* Аварийный сброс: переменная RESET_PASS=ник:новыйпароль — при запуске задаёт пароль аккаунту (или создаёт его). После входа УДАЛИ переменную. */
+async function startupTasks() {
+  const st = getStore();
+  try { console.log('Ники в хранилище: ' + JSON.stringify(await st.names())); } catch (e) { console.error('names:', e.message); }
+  const rp = process.env.RESET_PASS;
+  if (rp && rp.includes(':')) {
+    const i = rp.indexOf(':'), name = rp.slice(0, i).trim(), pw = rp.slice(i + 1);
+    if (validName(name) && pw.length >= 6) {
+      const k = keyOf(name), salt = crypto.randomBytes(16).toString('hex');
+      const acc = (await st.get(k)) || { name, rec: '', tokens: [], profile: null, t: Date.now(), made: Date.now(), bonusC: 0 };
+      acc.salt = salt; acc.hash = hashPass(pw, salt); acc.tokens = [];
+      await st.set(k, acc); console.log('[acc] RESET_PASS применён для', k, '— удали переменную RESET_PASS');
+    } else console.log('[acc] RESET_PASS: неверный формат (ник:пароль, пароль от 6 символов)');
+  }
+}
+module.exports = { startupTasks, handle, getStore, codeId, isAdmin };

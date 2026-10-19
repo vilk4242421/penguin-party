@@ -5,4 +5,6 @@
  */
 window.GAME_CONFIG = {
   SERVER_URL: '',
+  // Для APK и открытия из файла: игра лежит не на сервере, поэтому аккаунты и онлайн идут сюда
+  FALLBACK_SERVER: 'wss://penguin-party-tdj7.onrender.com',
 };
