@@ -584,7 +584,7 @@
       }
     }
     // шляпа
-    if (look.h === 27 && veriti) { // шар в стеклянном скафандре: купол вокруг шара, воротник, антенна
+    if (look.h === 27 && (veriti || lyut)) { // шар в стеклянном скафандре: купол вокруг шара, воротник, антенна
       const cy = -1.25, R = 1.42;
       ctx.save();
       ctx.fillStyle = 'rgba(170,220,255,.16)'; ctx.strokeStyle = 'rgba(235,248,255,.95)'; ctx.lineWidth = 0.09; circ(ctx, 0, cy, R); ctx.fill(); ctx.stroke();
@@ -596,7 +596,7 @@
       const bl = (Math.sin(t / 260) + 1) / 2; ctx.fillStyle = `rgb(255,${70 + bl * 60 | 0},60)`; ctx.strokeStyle = INK; ctx.lineWidth = 0.05; circ(ctx, 0.93, cy - R * 0.72 - 0.55, 0.11); ctx.fill(); ctx.stroke();
       ctx.restore();
     } else if (look.h) {
-      ctx.save(); ctx.translate(fx * 0.3 + (veriti ? 0 : 0), veriti ? -2.38 : -2.58); ctx.rotate(fx * 0.1);
+      ctx.save(); ctx.translate(fx * 0.3 + (veriti ? 0 : 0), veriti ? -2.38 : lyut ? -2.28 : -2.58); ctx.rotate(fx * 0.1);
       drawHat(ctx, look.h, t, fx); ctx.restore();
     }
     if (veriti && look.e && vis > 0.02) { ctx.save(); ctx.globalAlpha *= vis; drawEyewear(ctx, look.e, ox * 0.9, 0.36, -1.7); ctx.restore(); }
