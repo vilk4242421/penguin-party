@@ -14,7 +14,7 @@
     codes: {},
     opts: { sound: true, music: true, vibe: true },
   });
-  let P = DEF();
+  let P = DEF(), tampered = false;
 
   /* ---------- кликер: параметры ---------- */
   const CLK = {
@@ -37,29 +37,39 @@
   /* ---------- секретные коды (хранятся только хэши) ---------- */
   const norm = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
   const fnv = (s) => { let h = 0x811c9dc5; for (const ch of s) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16); };
-  const CODES = { '12809762': { slot: 's', idx: 1, id: 'veriti' }, 'bc164324': { slot: 's', idx: 2, id: 'lutikov' }, '257bb5e5': { slot: 's', idx: 3, id: 'rbveriti' }, 'd83f00d2': { coins: 10000, id: 'rybkisbest' } };
+  // награды за коды; сами коды проверяет сервер (POST /api/code), здесь их нет
+  const REWARDS = { veriti: { slot: 's', idx: 1 }, lutikov: { slot: 's', idx: 2 }, rbveriti: { slot: 's', idx: 3 }, rybkisbest: { coins: 10000 } };
 
+  // приводит произвольный объект профиля к полному виду (новые поля, бесплатные предметы, экипировка)
+  function normalize(o) {
+    const d = DEF(), Q = Object.assign(d, o);
+    Q.look = Object.assign(DEF().look, o.look); Q.stats = Object.assign(DEF().stats, o.stats); Q.opts = Object.assign(DEF().opts, o.opts);
+    Q.owned = Object.assign(DEF().owned, o.owned); Q.clk = Object.assign(DEF().clk, o.clk); Q.codes = o.codes || {};
+    if (Q.clk.done && !Q.owned.h.includes(31)) Q.owned.h.push(31); // прошедшие симулятор получают радужную корону
+    for (const slot of Object.keys(Q.owned)) for (let i = 0; i < C.count(slot); i++) if (C.price(slot, i) === 0 && !Q.owned[slot].includes(i)) Q.owned[slot].push(i);
+    for (const k of Object.keys(Q.look)) if (!Q.owned[k] || !Q.owned[k].includes(Q.look[k])) Q.look[k] = 0; // экипированное, которого нет в наличии, снимаем
+    if (Q.look.c === 0 && !Q.owned.c.includes(0)) Q.look.c = 4;
+    delete Q.sig;
+    return Q;
+  }
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) {
-        const o = JSON.parse(raw), d = DEF();
-        P = Object.assign(d, o);
-        P.look = Object.assign(DEF().look, o.look); P.stats = Object.assign(DEF().stats, o.stats); P.opts = Object.assign(DEF().opts, o.opts);
-        P.owned = Object.assign(DEF().owned, o.owned); P.clk = Object.assign(DEF().clk, o.clk); P.codes = o.codes || {};
-        if (P.clk.done && !P.owned.h.includes(31)) P.owned.h.push(31); // прошедшие симулятор получают радужную корону
+        const o = JSON.parse(raw);
+        if (o.sig && o.sig !== sign(o)) { tampered = true; o.coins = 0; for (const k of Object.keys(o)) if (!['name', 'opts'].includes(k)) delete o[k]; }
+        P = normalize(o);
       } else {
         const old = (k, d) => { try { const v = localStorage.getItem('ps_' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } };
-        P.name = old('name', ''); P.opts.sound = old('sound', true);
+        P.name = old('name', ''); P.opts.sound = old('sound', true); P = normalize(P);
       }
-    } catch (e) { P = DEF(); }
-    for (const slot of Object.keys(P.owned)) for (let i = 0; i < C.count(slot); i++) if (C.price(slot, i) === 0 && !P.owned[slot].includes(i)) P.owned[slot].push(i);
-    // экипированное, которого нет в наличии, снимаем
-    for (const k of Object.keys(P.look)) if (!P.owned[k] || !P.owned[k].includes(P.look[k])) P.look[k] = 0;
-    if (P.look.c === 0 && !P.owned.c.includes(0)) P.look.c = 4;
+    } catch (e) { P = normalize({}); }
     return P;
   }
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) {} }
+  // подпись профиля: если его правили вручную в консоли, при загрузке он сбрасывается (защита от случайных любопытных, не от опытных)
+  const stable = (o) => Array.isArray(o) ? '[' + o.map(stable).join(',') + ']' : o && typeof o === 'object' ? '{' + Object.keys(o).filter((k) => k !== 'sig').sort().map((k) => JSON.stringify(k) + ':' + stable(o[k])).join(',') + '}' : JSON.stringify(o);
+  const sign = (o) => { const t = stable(o) + '|pS~k7#Rybkis'; return fnv(t) + fnv(t.split('').reverse().join('') + 'x9'); };
+  function save() { try { P.sig = sign(P); localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) {} if (Acc.token) queueSync(); }
 
   const level = () => Math.floor(Math.sqrt(P.xp / 60)) + 1;
   const levelProgress = () => { const L = level(); const a = (L - 1) * (L - 1) * 60, b = L * L * 60; return (P.xp - a) / (b - a); };
@@ -121,14 +131,70 @@
   }
 
   /* ---------- коды ---------- */
-  function redeem(code) {
-    const h = fnv(norm(code)), c = CODES[h];
-    if (!c) return { ok: false };
-    if (c.coins) { const had = !!P.codes[c.id]; if (!had) { P.coins += c.coins; P.codes[c.id] = 1; save(); } return { ok: true, had, coins: c.coins }; }
+  /* ---------- аккаунт: профиль на сервере ---------- */
+  const Acc = { token: '', name: '', v: 0, state: '', onChange: null };
+  try { const s = JSON.parse(localStorage.getItem('ps_acc') || 'null'); if (s && s.token) { Acc.token = s.token; Acc.name = s.name; Acc.v = s.v || 0; } } catch (e) {}
+  const saveAcc = () => { try { if (Acc.token) localStorage.setItem('ps_acc', JSON.stringify({ token: Acc.token, name: Acc.name, v: Acc.v })); else localStorage.removeItem('ps_acc'); } catch (e) {} };
+  const note = (s) => { Acc.state = s; if (Acc.onChange) Acc.onChange(s); };
+  async function api(pathS, method, body, keep) {
+    const h = { 'Content-Type': 'application/json' };
+    if (Acc.token) { h.Authorization = 'Bearer ' + Acc.token; h['X-Account'] = encodeURIComponent(Acc.name); }
+    const r = await fetch(apiBase() + pathS, { method, headers: h, body: body ? JSON.stringify(body) : undefined, keepalive: !!keep });
+    let j = {}; try { j = await r.json(); } catch (e) {}
+    j.status = r.status; return j;
+  }
+  function adopt(o) { // заменить профиль на серверный (объект P остаётся тем же, на него ссылается игра)
+    const Q = normalize(o); for (const k of Object.keys(P)) delete P[k]; Object.assign(P, Q);
+    try { P.sig = sign(P); localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) {}
+  }
+  let syncT = null, syncing = false, dirty = false;
+  function queueSync() { dirty = true; if (!syncT) syncT = setTimeout(() => { syncT = null; syncNow(); }, 2500); }
+  async function syncNow(keep) {
+    if (!Acc.token || syncing) { if (syncing) dirty = true; return; }
+    syncing = true; dirty = false;
+    try {
+      const body = JSON.parse(JSON.stringify(P)); delete body.sig;
+      const r = await api('/api/profile', 'PUT', { profile: body, v: Acc.v }, keep);
+      if (r.status === 401) { Acc.token = ''; saveAcc(); note('expired'); }
+      else if (r.ok) { Acc.v = r.v; saveAcc(); note('ok'); }
+      else if (r.profile) { adopt(r.profile); Acc.v = r.v || 0; saveAcc(); note(r.e === 'rejected' ? 'rejected' : 'conflict'); }
+      else note('err');
+    } catch (e) { note('offline'); }
+    syncing = false; if (dirty) queueSync();
+  }
+  async function authFlow(pathS, body) {
+    let r; try { r = await api(pathS, 'POST', body); } catch (e) { return { ok: false, e: 'net' }; }
+    if (!r.ok) return { ok: false, e: r.status === 429 ? 'wait' : r.e || 'err' };
+    Acc.token = r.token; Acc.name = r.name; Acc.v = 0; saveAcc();
+    if (r.profile) { adopt(r.profile); try { const g = await api('/api/profile', 'GET'); Acc.v = g.v || 0; saveAcc(); } catch (e) {} }
+    else { dirty = true; await syncNow(); } // новый аккаунт: переносим профиль с этого устройства
+    note('ok'); return { ok: true, recovery: r.recovery, fresh: !r.profile };
+  }
+  const register = (name, pass) => authFlow('/api/register', { name, pass });
+  const login = (name, pass) => authFlow('/api/login', { name, pass });
+  const resetPass = (name, recovery, pass) => authFlow('/api/reset', { name, recovery, pass });
+  async function logout() { try { await api('/api/logout', 'POST'); } catch (e) {} Acc.token = ''; Acc.name = ''; Acc.v = 0; saveAcc(); note(''); }
+  if (root.addEventListener) {
+    root.addEventListener('pagehide', () => { if (Acc.token && dirty) syncNow(true); });
+    root.addEventListener('visibilitychange', () => { if (document.hidden && Acc.token && dirty) syncNow(true); });
+  }
+
+  function apiBase() {
+    const u = (root.GAME_CONFIG && root.GAME_CONFIG.SERVER_URL) || '';
+    if (u) return u.replace(/^ws/, 'http').replace(/\/+$/, '');
+    return root.location && /^https?:/.test(root.location.protocol) ? root.location.origin : '';
+  }
+  async function redeem(code) {
+    let id = null, srvHad = false;
+    try {
+      const j = await api(Acc.token ? '/api/acode' : '/api/code', 'POST', { code: String(code || '').slice(0, 60) }); if (!j.ok) return { ok: false, wait: !!j.wait || j.status === 429, auth: j.status === 401 }; id = j.id; srvHad = !!j.had;
+    } catch (e) { return { ok: false, net: true }; }
+    const c = REWARDS[id]; if (!c) return { ok: false };
+    if (c.coins) { const had = !!P.codes[id] || (Acc.token && srvHad); if (!had) { P.coins += c.coins; P.codes[id] = 1; save(); } return { ok: true, had, coins: c.coins }; }
     const had = owned(c.slot, c.idx);
-    unlock(c.slot, c.idx); P.codes[c.id] = 1; P.look[c.slot] = c.idx; save();
+    unlock(c.slot, c.idx); P.codes[id] = 1; P.look[c.slot] = c.idx; save();
     return { ok: true, had, slot: c.slot, idx: c.idx };
   }
 
-  root.Profile = { load, save, get P() { return P; }, level, levelProgress, earn, owned, buy, unlock, equip, ACH, checkAch, stat, statMax, modeWin, daily, set onAch(f) { onAch = f; }, ownedCount, CLK, clickerReward, redeem };
+  root.Profile = { Acc, register, login, resetPass, logout, syncNow, get tampered() { return tampered; }, load, save, get P() { return P; }, level, levelProgress, earn, owned, buy, unlock, equip, ACH, checkAch, stat, statMax, modeWin, daily, set onAch(f) { onAch = f; }, ownedCount, CLK, clickerReward, redeem };
 })(window);

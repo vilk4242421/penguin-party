@@ -7,6 +7,7 @@ const $ = (id) => document.getElementById(id);
 const PR = C.PR;
 const TAU = Math.PI * 2;
 Pro.load();
+if (Pro.tampered) setTimeout(() => { try { toast('⚠️ Профиль был изменён вручную и сброшен'); } catch (e) {} }, 900);
 const P = Pro.P;
 
 /* ================= локальное хранилище (мелочи) ================= */
@@ -22,6 +23,7 @@ const L = {
     online: 'Играть онлайн', onlineSub: 'Быстрый турнир с живыми игроками', tournament: 'Турнир', modes: 'Режимы', friends: 'С друзьями (по коду)',
     create: 'Создать комнату', join: 'Войти', offline: 'Против ботов', offlineSub: 'Без интернета — быстрый турнир', install: '📲 Установить',
     clicker: 'Симулятор', wardrobe: 'Гардероб', achievements: 'Награды', settings: 'Настройки', back: 'Назад',
+    account: 'Аккаунт', accSynced: 'Золото, покупки и прогресс сохраняются на сервере — зайди с другого устройства под этим ником и паролем.', accOut: 'Выйти', accInfo: 'Создай аккаунт, чтобы прогресс не терялся и был на всех устройствах. Без аккаунта можно играть как гость.', accUser: 'Ник аккаунта', accPass: 'Пароль (от 6 символов)', accRec: 'Код восстановления', accLogin: 'Войти', accReg: 'Создать аккаунт', accForgot: 'Забыл пароль?', accReset: 'Сменить пароль', accE: { name: 'Ник: 3–16 символов, буквы, цифры, _ и -', pass: 'Пароль: от 6 символов', taken: 'Такой ник уже занят', creds: 'Неверный ник или пароль', wait: 'Слишком много попыток, подожди немного', net: 'Нет связи с сервером', err: 'Ошибка, попробуй ещё раз' }, accDone: (n) => `Добро пожаловать, ${n}!`, accRecShow: (c) => `Твой код восстановления: ${c}\nЗапиши его — это единственный способ вернуть аккаунт при потере пароля.`, accSt: { ok: 'Синхронизировано', offline: 'Нет связи — синхронизация позже', rejected: 'Подозрительное изменение отклонено, профиль восстановлен с сервера', conflict: 'Профиль обновлён с другого устройства', expired: 'Сессия истекла — войди снова', err: 'Ошибка синхронизации' }, accGuest: 'Гость',
     sfx: 'Звуки', music: 'Музыка', vibe: 'Вибрация', language: 'Язык', update: '🔄 Обновить игру',
     tRand: '🎲 Случайные', tPick: '🎯 Свои режимы', pickHint: 'Выбери от 2 до 10 режимов — они пойдут по порядку', pickSel: (n) => `Выбрано режимов: ${n}`, sumPick: (n, b) => `🎯 Свои режимы: ${n}${b ? ' · с ботами' : ''}`,
     tankDead: (n) => `💥 Подбит! Возрождение на базе через ${n}`, gotFlag: 'Флаг у тебя! Вези на базу', flagCap: 'Флаг захвачен!',
@@ -31,7 +33,7 @@ const L = {
     tInfoOff: 'Играют только живые игроки: очки = число игроков − место. Например, 5 игроков: 4·3·2·1·0, 4 игрока: 3·2·1·0, 3: 2·1·0, 2: 1·0.',
     vsBots: 'Против ботов', offlineSub2: 'офлайн, сразу играем', onlineTour: 'Онлайн-турнир', onlineTourSub: 'с живыми игроками', withFriends: 'С друзьями (комната)', onlineShort: 'Онлайн',
     rounds: 'Раундов:', pickMode: 'Режим:', roomSet: 'Настройки комнаты', format: 'Формат:', fTour: '🏆 Турнир', fSeries: '🎮 Один режим', ok: 'Готово',
-    enter: 'Ввести', promoPh: 'Секретный код', badCode: 'Такого кода нет', codeOk: (n) => `🎉 Получено: ${n}!`, codeCoins: (n) => `🎉 +${n} 🪙 золота!`, codeHad: 'Этот приз уже у тебя — надето!',
+    enter: 'Ввести', promoPh: 'Секретный код', badCode: 'Такого кода нет', codeNet: 'Нет связи с сервером — коды работают только онлайн', codeWait: 'Слишком много попыток, подожди минуту', codeOk: (n) => `🎉 Получено: ${n}!`, codeCoins: (n) => `🎉 +${n} 🪙 золота!`, codeHad: 'Этот приз уже у тебя — надето!',
     lockClicker: '🎣 Выдаётся за прохождение симулятора', lockCode: '🔑 Выдаётся по секретному коду', lkClicker: '🎣 за прохождение симулятора', lkCode: '🔑 по секретному коду',
     tabs: 'Облик', tabc: 'Цвет', tabp: 'Узор', tabh: 'Шляпа', tabe: 'Очки', tabt: 'След',
     dash: 'РЫВОК', go: 'ВПЕРЁД!', round: 'Раунд', draw: 'Ничья!', youWon: 'ТЫ ПОБЕДИЛ!', fell: 'Ты выбыл! 🌊', watching: 'Смотришь за боем', nextRound: 'Войдёшь в следующем раунде',
@@ -54,6 +56,7 @@ const L = {
     online: 'Play online', onlineSub: 'Quick tournament with real players', tournament: 'Tournament', modes: 'Modes', friends: 'With friends (room code)',
     create: 'Create room', join: 'Join', offline: 'Vs bots', offlineSub: 'No internet — quick tournament', install: '📲 Install',
     clicker: 'Simulator', wardrobe: 'Wardrobe', achievements: 'Awards', settings: 'Settings', back: 'Back',
+    account: 'Account', accSynced: 'Coins, purchases and progress are saved on the server — sign in with this name and password on another device.', accOut: 'Sign out', accInfo: 'Create an account so progress is never lost and works on every device. You can also play as a guest.', accUser: 'Account name', accPass: 'Password (6+ chars)', accRec: 'Recovery code', accLogin: 'Sign in', accReg: 'Create account', accForgot: 'Forgot password?', accReset: 'Reset password', accE: { name: 'Name: 3–16 chars, letters, digits, _ and -', pass: 'Password: 6+ characters', taken: 'That name is taken', creds: 'Wrong name or password', wait: 'Too many tries, wait a bit', net: 'No connection to the server', err: 'Error, try again' }, accDone: (n) => `Welcome, ${n}!`, accRecShow: (c) => `Your recovery code: ${c}\nWrite it down — it is the only way back into the account if you lose the password.`, accSt: { ok: 'Synced', offline: 'Offline — will sync later', rejected: 'A suspicious change was rejected, profile restored from the server', conflict: 'Profile updated from another device', expired: 'Session expired — sign in again', err: 'Sync error' }, accGuest: 'Guest',
     sfx: 'Sounds', music: 'Music', vibe: 'Vibration', language: 'Language', update: '🔄 Update game',
     tRand: '🎲 Random', tPick: '🎯 Pick modes', pickHint: 'Pick 2 to 10 modes — they play in this order', pickSel: (n) => `Modes picked: ${n}`, sumPick: (n, b) => `🎯 Picked modes: ${n}${b ? ' · with bots' : ''}`,
     tankDead: (n) => `💥 Destroyed! Respawn at base in ${n}`, gotFlag: 'You have the flag! Get home', flagCap: 'Flag captured!',
@@ -63,7 +66,7 @@ const L = {
     tInfoOff: 'Only real players: points = players − place. E.g. 5 players: 4·3·2·1·0, 4 players: 3·2·1·0, 3: 2·1·0, 2: 1·0.',
     vsBots: 'Vs bots', offlineSub2: 'offline, play right away', onlineTour: 'Online tournament', onlineTourSub: 'with real players', withFriends: 'With friends (room)', onlineShort: 'Online',
     rounds: 'Rounds:', pickMode: 'Mode:', roomSet: 'Room settings', format: 'Format:', fTour: '🏆 Tournament', fSeries: '🎮 Single mode', ok: 'Done',
-    enter: 'Enter', promoPh: 'Secret code', badCode: 'No such code', codeOk: (n) => `🎉 Unlocked: ${n}!`, codeCoins: (n) => `🎉 +${n} 🪙 gold!`, codeHad: 'You already have it — equipped!',
+    enter: 'Enter', promoPh: 'Secret code', badCode: 'No such code', codeNet: 'No connection to the server — codes need internet', codeWait: 'Too many tries, wait a minute', codeOk: (n) => `🎉 Unlocked: ${n}!`, codeCoins: (n) => `🎉 +${n} 🪙 gold!`, codeHad: 'You already have it — equipped!',
     lockClicker: '🎣 Given for completing the simulator', lockCode: '🔑 Unlocked with a secret code', lkClicker: '🎣 for completing the simulator', lkCode: '🔑 secret code',
     tabs: 'Skin', tabc: 'Color', tabp: 'Pattern', tabh: 'Hat', tabe: 'Eyewear', tabt: 'Trail',
     dash: 'DASH', go: 'GO!', round: 'Round', draw: 'Draw!', youWon: 'YOU WIN!', fell: 'You are out! 🌊', watching: 'Spectating', nextRound: 'You join next round',
@@ -475,7 +478,7 @@ function handleEvents(evs) {
 }
 
 /* ================= жизненный цикл ================= */
-const SCREENS = ['menu', 'tourney', 'modes', 'clicker', 'wardrobe', 'achs', 'settings'];
+const SCREENS = ['menu', 'tourney', 'modes', 'clicker', 'wardrobe', 'achs', 'settings', 'account'];
 function showScreen(id) {
   for (const s of SCREENS) $(s).classList.toggle('hide', s !== id);
   if (id === 'clicker') Clicker.open();
@@ -1004,9 +1007,10 @@ function buildWardrobe() {
     grid.appendChild(d);
   }
 }
-$('bPromo').onclick = () => {
-  GA.init(); const r = Pro.redeem($('promo').value);
-  if (!r.ok) { toast('❌ ' + T('badCode')); GA.play('click'); return; }
+$('bPromo').onclick = async () => {
+  GA.init(); const code = $('promo').value; if (!code.trim()) return;
+  const r = await Pro.redeem(code);
+  if (!r.ok) { toast('❌ ' + (r.net ? T('codeNet') : r.wait ? T('codeWait') : T('badCode'))); GA.play('click'); return; }
   GA.play('ach'); $('promo').value = '';
   if (r.coins) { toast(r.had ? T('codeHad') : T('codeCoins', r.coins)); refreshProfileUI(); return; }
   toast(r.had ? T('codeHad') : T('codeOk', Cos.name(r.slot, r.idx, lang)));
@@ -1059,6 +1063,31 @@ function initMenu() {
   $('bAch').onclick = () => { GA.init(); GA.play('click'); buildAchs(); showScreen('achs'); };
   $('bABack').onclick = () => { GA.play('click'); showScreen('menu'); };
   $('bSet').onclick = () => { GA.init(); GA.play('click'); syncToggles(); showScreen('settings'); };
+  // ---- аккаунт ----
+  let accReset = false;
+  const accE = (e) => (T('accE')[e] || T('accE').err);
+  function renderAcc() {
+    const on = !!Pro.Acc.token;
+    $('accIn').classList.toggle('hide', !on); $('accOut').classList.toggle('hide', on);
+    $('accName').textContent = Pro.Acc.name; $('accRecBox').classList.toggle('hide', !accReset);
+    $('bAccLogin').textContent = accReset ? T('accReset') : T('accLogin'); $('bAccReg').classList.toggle('hide', accReset);
+    $('accState').textContent = T('accSt')[Pro.Acc.state] || '';
+  }
+  Pro.Acc.onChange = (s) => { renderAcc(); if (s === 'rejected' || s === 'conflict') { toast(T('accSt')[s]); refreshProfileUI(); } if (s === 'expired') toast(T('accSt').expired); };
+  $('bAcc').onclick = () => { GA.init(); GA.play('click'); accReset = false; $('accMsg').textContent = ''; renderAcc(); showScreen('account'); };
+  $('bAccBack').onclick = () => { GA.play('click'); showScreen('settings'); };
+  $('bAccForgot').onclick = () => { accReset = !accReset; GA.play('click'); renderAcc(); };
+  async function accGo(kind) {
+    const name = $('accUser').value.trim(), pass = $('accPass').value; $('accMsg').textContent = '…';
+    const r = kind === 'reg' ? await Pro.register(name, pass) : accReset ? await Pro.resetPass(name, $('accRec').value, pass) : await Pro.login(name, pass);
+    if (!r.ok) { $('accMsg').textContent = '❌ ' + accE(r.e); GA.play('click'); return; }
+    $('accPass').value = ''; $('accMsg').textContent = ''; accReset = false; GA.play('ach'); renderAcc(); refreshProfileUI(); try { buildWardrobe(); } catch (e) {}
+    $('promo') && ($('promo').value = '');
+    toast(T('accDone', Pro.Acc.name));
+    if (r.recovery) $('accMsg').textContent = '🔑 ' + T('accRecShow', r.recovery);
+  }
+  $('bAccLogin').onclick = () => accGo('login'); $('bAccReg').onclick = () => accGo('reg');
+  $('accPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') accGo('login'); });
   $('bSBack').onclick = () => { GA.play('click'); showScreen('menu'); };
   for (const [id, k] of [['tSfx', 'sound'], ['tMusic', 'music'], ['tVibe', 'vibe']]) $(id).onclick = () => { P.opts[k] = !P.opts[k]; Pro.save(); syncToggles(); GA.play('click'); };
   $('bS2').onclick = () => { GA.init(); P.opts.sound = !P.opts.sound; Pro.save(); syncToggles(); };

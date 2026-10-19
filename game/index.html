@@ -34,6 +34,10 @@ h2{margin:0 0 8px;font-size:24px;text-shadow:0 2px 0 #0a2f55}
 .row{display:flex;gap:8px;justify-content:center;align-items:center;margin:8px 0;flex-wrap:wrap}
 #name{width:100%;padding:11px 14px;border-radius:14px;border:2px solid rgba(255,255,255,.5);background:rgba(255,255,255,.92);color:#0a2f55;font-size:18px;font-weight:700;text-align:center;outline:none}
 #name:focus{border-color:var(--accent)}
+.inp{width:100%;padding:11px 14px;margin:5px 0;border-radius:14px;border:2px solid rgba(255,255,255,.5);background:rgba(255,255,255,.92);color:#0a2f55;font-size:17px;font-weight:700;text-align:center;outline:none}
+.inp:focus{border-color:var(--accent)}
+.accmsg{min-height:20px;font-size:14px;margin:6px 0;opacity:.95;white-space:pre-line;user-select:text;-webkit-user-select:text}
+.accnote{font-size:12px;opacity:.75;margin:4px 0}
 .lvlbar{display:flex;align-items:center;gap:8px;margin:8px 2px 2px;font-size:14px;font-weight:700}
 .lvlbar .bar{flex:1;height:10px;border-radius:6px;background:rgba(0,0,0,.3);overflow:hidden}
 .lvlbar .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ffd23f,#ff9f1c);border-radius:6px}
@@ -329,6 +333,29 @@ body.fin #toasts{top:100px;left:8px;right:auto;align-items:flex-start;max-width:
   </div>
 </div>
 
+<div id="account" class="screen hide">
+  <div class="card">
+    <h2>👤 <span data-t="account">Аккаунт</span></h2>
+    <div id="accIn" class="hide">
+      <p style="margin:6px 0">✅ <b id="accName"></b></p>
+      <div class="accnote" id="accState"></div>
+      <div class="accnote" data-t="accSynced">Золото, покупки и прогресс сохраняются на сервере — зайди с другого устройства под этим ником и паролем.</div>
+      <button class="btn sub" id="bAccOut" data-t="accOut">Выйти</button>
+    </div>
+    <div id="accOut">
+      <div class="accnote" data-t="accInfo">Создай аккаунт, чтобы прогресс не терялся и был на всех устройствах. Без аккаунта можно играть как гость.</div>
+      <input id="accUser" class="inp" maxlength="16" autocomplete="username" data-ph="accUser" placeholder="Ник аккаунта">
+      <input id="accPass" class="inp" type="password" maxlength="64" autocomplete="current-password" data-ph="accPass" placeholder="Пароль (от 6 символов)">
+      <div id="accRecBox" class="hide"><input id="accRec" class="inp" maxlength="20" autocomplete="off" data-ph="accRec" placeholder="Код восстановления"></div>
+      <button class="btn" id="bAccLogin" data-t="accLogin">Войти</button>
+      <button class="btn alt" id="bAccReg" data-t="accReg">Создать аккаунт</button>
+      <button class="mini" id="bAccForgot" data-t="accForgot">Забыл пароль?</button>
+    </div>
+    <div class="accmsg" id="accMsg"></div>
+    <button class="btn sub" id="bAccBack" data-t="back">Назад</button>
+  </div>
+</div>
+
 <div id="settings" class="screen hide">
   <div class="card">
     <h2>⚙️ <span data-t="settings">Настройки</span></h2>
@@ -336,6 +363,7 @@ body.fin #toasts{top:100px;left:8px;right:auto;align-items:flex-start;max-width:
     <div class="setrow"><span data-t="music">Музыка</span><button class="mini" id="tMusic"></button></div>
     <div class="setrow"><span data-t="vibe">Вибрация</span><button class="mini" id="tVibe"></button></div>
     <div class="setrow"><span data-t="language">Язык</span><button class="mini" id="bLang">RU</button></div>
+    <button class="btn alt" id="bAcc">👤 <span data-t="account">Аккаунт</span></button>
     <button class="btn alt" id="bUpdate" data-t="update">🔄 Обновить игру</button>
     <button class="btn sub" id="bSBack" data-t="back">Назад</button>
     <div id="ver2" style="font-size:12px;opacity:.7"></div>

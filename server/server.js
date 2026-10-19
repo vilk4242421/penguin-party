@@ -33,13 +33,41 @@ const rooms = new Map(); // code -> room
 let connCount = 0;
 const ipCount = new Map();
 
+// секретные коды проверяет сервер: в файлах игры лежат только награды, а сами коды (в виде хэшей) — здесь
+const accounts = require('./accounts.js');
+const codeTries = new Map(); // ip -> [время попыток] (не больше 8 в минуту)
+setInterval(() => codeTries.clear(), 10 * 60 * 1000);
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Account' };
+
 const server = http.createServer((req, res) => {
   const url = decodeURIComponent((req.url || '/').split('?')[0]);
+  if (url.startsWith('/api/') && url !== '/api/code') {
+    if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }
+    const send = (code, obj) => { res.writeHead(code, Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, CORS)); res.end(JSON.stringify(obj)); };
+    accounts.handle(req, res, url, send).catch((e) => { console.error('api', e.message); try { send(500, { ok: false }); } catch (e2) {} });
+    return;
+  }
+  if (url === '/api/code') {
+    if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }
+    if (req.method !== 'POST') { res.writeHead(405, CORS); return res.end(); }
+    const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim(), now = Date.now();
+    const arr = (codeTries.get(ip) || []).filter((t) => now - t < 60000);
+    if (arr.length >= 8) { res.writeHead(429, Object.assign({ 'Content-Type': 'application/json' }, CORS)); return res.end('{"ok":false,"wait":true}'); }
+    arr.push(now); codeTries.set(ip, arr);
+    let body = ''; req.on('data', (d) => { body += d; if (body.length > 512) req.destroy(); });
+    req.on('end', () => {
+      let code = ''; try { code = JSON.parse(body).code; } catch (e) {}
+      const id = accounts.codeId(code);
+      res.writeHead(200, Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, CORS));
+      res.end(JSON.stringify(id ? { ok: true, id } : { ok: false }));
+    });
+    return;
+  }
   if (url === '/stats') {
     let players = 0;
     for (const r of rooms.values()) players += r.clients.size;
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
-    return res.end(JSON.stringify({ players, rooms: rooms.size, proto: Sim.C.PROTO, version: Sim.C.VERSION, build: BUILD }));
+    return res.end(JSON.stringify({ players, rooms: rooms.size, proto: Sim.C.PROTO, version: Sim.C.VERSION, build: BUILD, store: accounts.getStore().kind }));
   }
   if (url === '/health') { res.writeHead(200); return res.end('ok'); }
   let file = path.normalize(path.join(GAME_DIR, url === '/' ? 'index.html' : url));
@@ -199,4 +227,4 @@ setInterval(() => {
   }
 }, 10000);
 
-server.listen(PORT, () => console.log('Penguin Sumo server on :' + PORT + ' build ' + BUILD));
+server.listen(PORT, () => { console.log('Penguin Sumo server on :' + PORT + ' build ' + BUILD); console.log('Хранилище аккаунтов: ' + accounts.getStore().kind + (accounts.getStore().kind === 'file' ? ' (на бесплатном Render пропадёт при перезапуске — задайте DATABASE_URL)' : '')); });
