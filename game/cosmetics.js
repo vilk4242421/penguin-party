@@ -37,7 +37,7 @@
   const CARS = [['Карт', 'Kart', 0], ['Красный Хищник', 'Red Predator', 10000], ['Жёлтая машина', 'Yellow Car', 5000], ['Синяя машина', 'Blue Car', 3000], ['Белая Классика', 'White Classic', 6500], ['Зелёная машина', 'Green Car', 2000]];
   // размеры — в долях радиуса пингвина PR; hl/tl — половина длины капота/багажника
   const CAR_SPEC = [null,
-    { col: '#8c1230', dk: '#4a0a18', haunch: 1, L: 2.0, W: 0.95, bh: 0.4, wr: 0.42, hl: 0.55, tl: 0.3, str: '', vents: 1, seat: '#14141a', lamp: 'round' },
+    { col: '#8c1230', dk: '#4a0a18', L: 2.0, W: 0.95, bh: 0.4, wr: 0.42, hl: 0.55, tl: 0.3, str: '', vents: 1, seat: '#14141a', lamp: 'round' },
     { col: '#ffcf1a', dk: '#8a6a00', L: 1.85, W: 1.0, bh: 0.3, wr: 0.4, hl: 0.3, tl: 0.5, str: '', louv: 1, seat: '#2a1a10', lamp: 'slit' },
     { col: '#1f78e0', dk: '#0c3b78', L: 1.6, W: 0.9, bh: 0.36, wr: 0.36, hl: 0.34, tl: 0.26, str: '#ffffff', hoops: 1, seat: '#e9edf5', lamp: 'round' },
     { col: '#f2ecdc', dk: '#a8a08a', L: 2.1, W: 0.95, bh: 0.4, wr: 0.42, hl: 0.5, tl: 0.42, str: '', fins: 1, chrome: 1, seat: '#c9222e', lamp: 'round' },

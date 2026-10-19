@@ -682,8 +682,8 @@
     // колёса: круглые, вынесены за борт кузова, вращаются при движении
     const rl = CAR_ROLL.get(p.id) || { x: p.x, y: p.y, ang: 0 };
     { const dx = p.x - rl.x, dy = p.y - rl.y; if (Math.abs(dx) < 150 && Math.abs(dy) < 150) rl.ang -= (dx * cr + dy * sr) / wr; rl.x = p.x; rl.y = p.y; CAR_ROLL.set(p.id, rl); }
-    const wh = [], TH = PR * 0.17;
-    for (const lx of [-0.62 * L, 0.62 * L]) for (const sd of [-1, 1]) { const wOut = Math.max(prof(lx), prof(lx - wr), prof(lx + wr)) + PR * 0.24; wh.push({ lx, ly: sd * wOut, y: wy(lx, sd * wOut), sd }); }
+    const wh = [], TH = PR * 0.15;
+    for (const lx of [-0.62 * L, 0.62 * L]) for (const sd of [-1, 1]) { const wOut = Math.max(prof(lx), prof(lx - wr), prof(lx + wr)) + PR * 0.36; wh.push({ lx, ly: sd * wOut, y: wy(lx, sd * wOut), sd }); }
     wh.sort((m, n) => m.y - n.y);
     const wheelDraw = (w) => {
       const basis = (ly) => { const f = W(w.lx, ly), p0 = pr(cam, f[0], f[1], wr), p1 = pr(cam, f[0] + cr, f[1] + sr, wr), p2 = pr(cam, f[0], f[1], wr + 1); return [p1[0] - p0[0], p1[1] - p0[1], p2[0] - p0[0], p2[1] - p0[1], p0[0], p0[1]]; };
