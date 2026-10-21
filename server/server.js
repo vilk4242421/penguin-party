@@ -1,251 +1,303 @@
-/* Penguin Sumo — сервер мультиплеера (WebSocket, авторитетная физика).
- * Запуск: npm install && node server.js   (PORT по умолчанию 8080)
- * Также раздаёт статику из ../game, чтобы игру можно было открыть и установить как PWA прямо отсюда.
- */
+'use strict';
+/* Dino Evolution — сервер: статика, HTTP API (аккаунты, профиль, рейтинг), /stats и WebSocket-комнаты на одном порту.
+   Без npm-зависимостей (pg — по желанию, только для PostgreSQL). Вся игровая логика — в ../game (общая с офлайн-режимом). */
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { WebSocketServer } = require('ws');
-const Sim = require(path.join(__dirname, '..', 'game', 'sim.js'));
-
-const PORT = process.env.PORT || 8080;
-const GAME_DIR = path.join(__dirname, '..', 'game');
-const TICK = 1 / 60;
-const SNAP_EVERY = 3; // 20 Гц
-const MAX_CONN_PER_IP = 12;
-
-const MIME = {
-  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json',
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon',
-};
-
-// «версия сборки» = хэш всех файлов игры; подставляется в sw.js, чтобы клиенты обновлялись сами после каждого деплоя
 const crypto = require('crypto');
-function computeBuild() {
+const { attach } = require('./ws.js');
+const initStore = require('./db.js');
+const CONFIG = require('../game/config.js');
+const Sim = require('../game/sim.js');
+const Rooms = require('../game/rooms.js');
+
+const PORT = parseInt(process.env.PORT, 10) || 3000;
+const ADMINS = (process.env.ADMINS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+const PUBLIC = path.join(__dirname, '..', 'game');
+const NICK_RE = /^[\p{L}\p{N}_-]{3,14}$/u;
+const isAdmin = nick => ADMINS.includes(String(nick).toLowerCase());
+
+let store = null;
+const scrypt = (pw, salt) => new Promise((res, rej) => crypto.scrypt(pw, salt, 64, (e, k) => e ? rej(e) : res(k)));
+
+// ---------------------------------------------------------------- лимиты
+const hits = new Map();
+function rateLimited(key, max, windowMs) {
+  const now = Date.now();
+  const arr = (hits.get(key) || []).filter(t => now - t < windowMs);
+  arr.push(now); hits.set(key, arr);
+  return arr.length > max;
+}
+setInterval(() => { const now = Date.now(); for (const [k, v] of hits) if (!v.some(t => now - t < 120000)) hits.delete(k); }, 60000).unref();
+function clientIp(req) {
+  const xf = req.headers['x-forwarded-for'];
+  return (xf ? String(xf).split(',')[0].trim() : req.socket.remoteAddress) || 'unknown';
+}
+
+// ---------------------------------------------------------------- профиль
+/* Прогресс (уровень, опыт, эволюция, монеты, победы, короли) принадлежит серверу и меняется только игрой в комнате.
+   Через HTTP клиент может лишь создать персонажа (имя, цвет, класс, вылупление) или начать новый забег. */
+function applyCreate(old, inc, newRun) {
+  const C = CONFIG;
+  if (!inc || typeof inc !== 'object' || Array.isArray(inc)) return { error: 'invalid_profile' };
+  const name = typeof inc.name === 'string' ? inc.name.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, C.NAME_MAX) : '';
+  if (!Number.isInteger(inc.color) || inc.color < 0 || inc.color >= C.COLORS.length) return { error: 'invalid_profile' };
+  if (typeof inc.hatched !== 'boolean') return { error: 'invalid_profile' };
+  const cls = inc.cls === null ? null : (typeof inc.cls === 'string' && C.CLASSES[inc.cls] ? inc.cls : undefined);
+  if (cls === undefined) return { error: 'invalid_profile' };
+  if (inc.hatched && (!cls || !name)) return { error: 'invalid_profile' };
+  let p = Sim.fixProfile(JSON.parse(JSON.stringify(old || Sim.defaultProfile(''))));
+  if (newRun) {
+    const d = Sim.defaultProfile(name);
+    Object.assign(d, { wins: p.wins, kings: p.kings, kingAt: p.kingAt, cosmetics: p.cosmetics, cosmetic: p.cosmetic, coins: p.coins, stats: p.stats, playTime: p.playTime });
+    p = d;
+  } else if (p.hatched && p.cls && cls !== p.cls) return { error: 'class_locked' };
+  p.name = name; p.color = inc.color;
+  if (!p.hatched) { p.cls = cls; p.hatched = inc.hatched; }
+  p.savedAt = Date.now();
+  return { profile: p };
+}
+
+// ---------------------------------------------------------------- HTTP
+const MIME = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json',
+  '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8',
+  '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wasm': 'application/wasm'
+};
+function cors(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+}
+function json(res, code, obj) {
+  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify(obj));
+}
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let size = 0; const chunks = [];
+    req.on('data', c => { size += c.length; if (size > 20000) { reject(new Error('too_large')); req.destroy(); } else chunks.push(c); });
+    req.on('end', () => { try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}); } catch (e) { reject(new Error('bad_json')); } });
+    req.on('error', reject);
+  });
+}
+async function authUser(req) {
+  const m = /^Bearer ([a-f0-9]{64})$/.exec(req.headers.authorization || '');
+  if (!m) return null;
+  const user = await store.userByToken(m[1]);
+  return user ? { user, token: m[1] } : null;
+}
+const userInfo = u => ({ nick: u.display, admin: isAdmin(u.nick) });
+async function issueToken(user) {
+  const token = crypto.randomBytes(32).toString('hex');
+  await store.createToken(user.id, token, Date.now() + CONFIG.TOKEN_DAYS * 86400000);
+  return token;
+}
+const online = new Map();   // userId -> player (один вход на аккаунт)
+function liveProfile(user) { const p = online.get(user.id); return p && p.profile ? p.profile : user.profile; }
+
+let lbCache = { at: 0, data: null };
+async function leaderboard() {
+  if (lbCache.data && Date.now() - lbCache.at < 8000) return lbCache.data;
+  const [wins, kings] = await Promise.all([store.topWins(50), store.topKings(50)]);
+  lbCache = { at: Date.now(), data: { wins, kings } };
+  return lbCache.data;
+}
+
+async function handleApi(req, res, pathname) {
+  const ip = clientIp(req);
+  if (req.method === 'POST' && (pathname === '/api/register' || pathname === '/api/login')) {
+    if (rateLimited(ip, 12, 60000)) return json(res, 429, { error: 'rate_limited' });
+    const b = await readBody(req);
+    const display = typeof b.nick === 'string' ? b.nick.trim() : '';
+    const pw = typeof b.password === 'string' ? b.password : '';
+    if (!NICK_RE.test(display)) return json(res, 400, { error: 'bad_nick' });
+    if (pw.length < 6 || pw.length > 64) return json(res, 400, { error: 'bad_password' });
+    const nick = display.toLowerCase();
+    if (pathname === '/api/register') {
+      const salt = crypto.randomBytes(16);
+      const hash = (await scrypt(pw, salt)).toString('hex');
+      const profile = Sim.defaultProfile(display); profile.savedAt = Date.now();
+      const user = await store.createUser({ nick, display, hash, salt: salt.toString('hex'), profile });
+      if (!user) return json(res, 409, { error: 'nick_taken' });
+      return json(res, 200, { token: await issueToken(user), user: userInfo(user), profile: user.profile });
+    }
+    const user = await store.findByNick(nick);
+    const salt = user ? Buffer.from(user.salt, 'hex') : crypto.randomBytes(16);
+    const hash = await scrypt(pw, salt);
+    const ok = user && crypto.timingSafeEqual(hash, Buffer.from(user.hash, 'hex'));
+    if (!ok) return json(res, 401, { error: 'bad_credentials' });
+    return json(res, 200, { token: await issueToken(user), user: userInfo(user), profile: liveProfile(user) });
+  }
+  if (req.method === 'GET' && pathname === '/api/health') return json(res, 200, { ok: true, version: CONFIG.VERSION });
+  if (req.method === 'GET' && pathname === '/api/leaderboard') {
+    if (rateLimited('lb' + ip, 60, 60000)) return json(res, 429, { error: 'rate_limited' });
+    return json(res, 200, await leaderboard());
+  }
+
+  const auth = await authUser(req);
+  if (!auth) return json(res, 401, { error: 'unauthorized' });
+
+  if (req.method === 'GET' && pathname === '/api/me') return json(res, 200, { user: userInfo(auth.user), profile: liveProfile(auth.user) });
+  if (req.method === 'POST' && pathname === '/api/logout') {
+    await store.deleteToken(auth.token);
+    return json(res, 200, { ok: true });
+  }
+  if (req.method === 'POST' && pathname === '/api/profile') {
+    if (rateLimited('p' + auth.user.id, 20, 60000)) return json(res, 429, { error: 'rate_limited' });
+    if (online.has(auth.user.id)) return json(res, 409, { error: 'in_game', profile: liveProfile(auth.user) });
+    const b = await readBody(req);
+    const result = applyCreate(auth.user.profile, b.profile, !!b.newRun);
+    if (result.error) return json(res, 400, { error: result.error, profile: auth.user.profile });
+    auth.user.profile = result.profile;
+    await store.saveProfile(auth.user.id, result.profile);
+    return json(res, 200, { profile: result.profile });
+  }
+  return json(res, 404, { error: 'not_found' });
+}
+
+// ---------------------------------------------------------------- статика
+function buildHash() {
   const h = crypto.createHash('sha1');
-  const walk = (d) => fs.readdirSync(d).sort().forEach((f) => { const fp = path.join(d, f); if (fs.statSync(fp).isDirectory()) walk(fp); else { h.update(f); h.update(fs.readFileSync(fp)); } });
-  try { walk(GAME_DIR); } catch (e) {}
+  (function walk(dir) {
+    for (const f of fs.readdirSync(dir).sort()) {
+      const full = path.join(dir, f), st = fs.statSync(full);
+      if (st.isDirectory()) walk(full); else h.update(f + st.size + st.mtimeMs);
+    }
+  })(PUBLIC);
   return h.digest('hex').slice(0, 10);
 }
-const BUILD = computeBuild();
+const BUILD = buildHash();
 
-const rooms = new Map(); // code -> room
-let connCount = 0;
-const ipCount = new Map();
+async function statsPage(res) {
+  const accounts = await store.countUsers();
+  const hs = hub.stats();
+  const html = `<!doctype html><meta charset="utf-8"><title>Dino Evolution — stats</title>
+<style>body{font:16px system-ui;background:#10201a;color:#e8f3df;padding:32px}td{padding:4px 18px 4px 0}b{color:#9be37a}</style>
+<h2>Dino Evolution — /stats</h2><table>
+<tr><td>Хранилище</td><td><b>${store.kind.replace(/[<>&]/g, '')}</b></td></tr>
+<tr><td>Аккаунтов</td><td><b>${accounts}</b></td></tr>
+<tr><td>Комнат / игроков онлайн</td><td><b>${hs.rooms} / ${hs.players}</b></td></tr>
+<tr><td>Версия / сборка</td><td><b>${CONFIG.VERSION} / ${BUILD}</b></td></tr></table>`;
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(html);
+}
 
-// секретные коды проверяет сервер: в файлах игры лежат только награды, а сами коды (в виде хэшей) — здесь
-const accounts = require('./accounts.js');
-const codeTries = new Map(); // ip -> [время попыток] (не больше 8 в минуту)
-setInterval(() => codeTries.clear(), 10 * 60 * 1000);
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Account' };
-
-const server = http.createServer((req, res) => {
-  const url = decodeURIComponent((req.url || '/').split('?')[0]);
-  if (url.startsWith('/api/') && url !== '/api/code') {
-    if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }
-    const send = (code, obj) => { res.writeHead(code, Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, CORS)); res.end(JSON.stringify(obj)); };
-    accounts.handle(req, res, url, send).catch((e) => { console.error('api', e.message); try { send(500, { ok: false }); } catch (e2) {} });
-    return;
-  }
-  if (url === '/api/code') {
-    if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }
-    if (req.method !== 'POST') { res.writeHead(405, CORS); return res.end(); }
-    const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim(), now = Date.now();
-    const arr = (codeTries.get(ip) || []).filter((t) => now - t < 60000);
-    if (arr.length >= 8) { res.writeHead(429, Object.assign({ 'Content-Type': 'application/json' }, CORS)); return res.end('{"ok":false,"wait":true}'); }
-    arr.push(now); codeTries.set(ip, arr);
-    let body = ''; req.on('data', (d) => { body += d; if (body.length > 512) req.destroy(); });
-    req.on('end', () => {
-      let code = ''; try { code = JSON.parse(body).code; } catch (e) {}
-      const id = accounts.codeId(code);
-      res.writeHead(200, Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, CORS));
-      res.end(JSON.stringify(id ? { ok: true, id } : { ok: false }));
-    });
-    return;
-  }
-  if (url === '/stats') {
-    let players = 0;
-    for (const r of rooms.values()) players += r.clients.size;
-    accounts.getStore().count().catch(() => -1).then((n) => {
-      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify({ players, rooms: rooms.size, proto: Sim.C.PROTO, version: Sim.C.VERSION, build: BUILD, store: accounts.getStore().kind, accounts: n }));
-    });
-    return;
-  }
-  if (url === '/health') { res.writeHead(200); return res.end('ok'); }
-  let file = path.normalize(path.join(GAME_DIR, url === '/' ? 'index.html' : url));
-  if (!file.startsWith(GAME_DIR)) { res.writeHead(403); return res.end(); }
-  fs.readFile(file, (err, data) => {
-    if (err) { res.writeHead(404); return res.end('Not found'); }
-    if (path.basename(file) === 'sw.js') data = Buffer.from(String(data).replace("const BUILD = 'dev';", "const BUILD = '" + BUILD + "';"));
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
-    res.end(data);
+function serveStatic(req, res, pathname) {
+  let rel;
+  try { rel = decodeURIComponent(pathname); } catch (e) { res.writeHead(400); return res.end(); }
+  if (rel === '/' || rel === '') rel = '/index.html';
+  const full = path.normalize(path.join(PUBLIC, rel));
+  if (full !== PUBLIC && !full.startsWith(PUBLIC + path.sep)) { res.writeHead(403); return res.end(); }
+  fs.stat(full, (err, st) => {
+    if (err || !st.isFile()) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Not found'); }
+    const type = MIME[path.extname(full).toLowerCase()] || 'application/octet-stream';
+    if (path.basename(full) === 'sw.js') {        // версия кэша меняется вместе с файлами игры
+      const body = fs.readFileSync(full, 'utf8').replace(/__BUILD__/g, BUILD);
+      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
+      return res.end(req.method === 'HEAD' ? undefined : body);
+    }
+    res.writeHead(200, { 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': rel.startsWith('/vendor/') ? 'public, max-age=86400' : 'no-cache' });
+    if (req.method === 'HEAD') return res.end();
+    fs.createReadStream(full).pipe(res);
   });
+}
+
+const server = http.createServer(async (req, res) => {
+  cors(res);
+  if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+  const pathname = (req.url || '/').split('?')[0];
+  try {
+    if (pathname.startsWith('/api/')) return await handleApi(req, res, pathname);
+    if (pathname === '/health') { res.writeHead(200); return res.end('ok'); }
+    if (pathname === '/stats') return await statsPage(res);
+    if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }
+    serveStatic(req, res, pathname);
+  } catch (e) {
+    if (res.headersSent) return res.end();
+    const code = e.message === 'too_large' ? 413 : e.message === 'bad_json' ? 400 : 500;
+    if (code === 500) console.error('[http]', e);
+    json(res, code, { error: code === 500 ? 'server_error' : e.message });
+  }
 });
 
-const wss = new WebSocketServer({ server, maxPayload: 2048, perMessageDeflate: false });
-
-function makeCode() {
-  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  for (;;) {
-    let c = '';
-    for (let i = 0; i < 4; i++) c += A[Math.floor(Math.random() * A.length)];
-    if (!rooms.has(c)) return c;
+// ---------------------------------------------------------------- игра
+const pendingSave = new Map();    // userId -> profile (сохраняем пачкой, чтобы не писать в базу на каждое событие)
+async function flushSaves() {
+  const items = [...pendingSave]; pendingSave.clear();
+  for (const [id, prof] of items) {
+    try { await store.saveProfile(id, prof); } catch (e) { console.error('[save]', e.message); pendingSave.set(id, prof); }
   }
 }
+setInterval(flushSaves, 5000).unref();
 
-function cfgKey(c) { return (c.kind ? 'm' + c.mode + 'x' + c.len : 't' + c.len) + (c.bots ? 'b' : 'n'); }
-function createRoom(pub, cfg) {
-  const game = new Sim.Game({ lobby: true, pub });
-  if (cfg) game.applyCfg(cfg);
-  const room = { code: makeCode(), pub, game, clients: new Set() };
-  rooms.set(room.code, room);
-  return room;
-}
+const hub = new Rooms.Hub({
+  onSave(p) { if (p && !p.bot && p.userId) pendingSave.set(p.userId, p.profile); },
+  onGone(p) { if (online.get(p.userId) === p) online.delete(p.userId); }
+});
+setInterval(() => { try { hub.tick(); } catch (e) { console.error('[tick]', e); } }, 1000 / CONFIG.TICK_RATE);
 
-function findPublicRoom(cfg) {
-  const want = cfgKey(cfg);
-  // лучше всего — комната в ожидании; иначе матч, который только начался
-  let best = null, bs = -1;
-  for (const r of rooms.values()) {
-    if (!r.pub || cfgKey(r.game.cfg) !== want) continue;
-    const g = r.game, n = g.humans().length;
-    if (n >= Sim.C.MAX) continue;
-    let sc = -1;
-    if (g.phase === 'lobby') sc = 100 + n;
-    else if (g.round <= 1 && g.phase !== 'final') sc = 50 + n;
-    if (sc > bs) { bs = sc; best = r; }
-  }
-  return best || createRoom(true, cfg);
-}
+function sendConn(conn, obj) { try { conn.send(JSON.stringify(obj)); } catch (e) { /* ignore */ } }
 
-function send(ws, obj) {
-  if (ws.readyState === 1) ws.send(typeof obj === 'string' ? obj : JSON.stringify(obj));
-}
-function broadcast(room, str) {
-  for (const c of room.clients) send(c, str);
-}
+attach(server, '/ws', conn => {
+  let helloing = false, count = 0;
+  const rateTimer = setInterval(() => { count = 0; }, 1000);
+  const helloTimer = setTimeout(() => { if (!conn.player) conn.close(4000); }, 5000);
+  const pingTimer = setInterval(() => { if (Date.now() - conn.lastRecv > 45000) conn.kill(); else conn.ping(); }, 15000);
 
-function cleanName(s) {
-  s = String(s || '').replace(/[\u0000-\u001f<>&"'`\\]/g, '').trim().slice(0, 14);
-  return s || 'Penguin';
-}
+  conn.onmessage = async raw => {
+    if (++count > CONFIG.MAX_MSG_PER_SEC) return conn.close(4008);
+    let m; try { m = JSON.parse(raw); } catch (e) { return; }
+    if (!m || typeof m.t !== 'string') return;
 
-wss.on('connection', (ws, req) => {
-  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
-  const n = (ipCount.get(ip) || 0) + 1;
-  if (n > MAX_CONN_PER_IP) { ws.close(1008, 'too many'); return; }
-  ipCount.set(ip, n); connCount++;
-
-  ws.room = null; ws.pid = 0; ws.alive = true; ws.lastMsg = Date.now();
-  ws.bucket = 60; ws.bucketT = Date.now();
-
-  ws.on('pong', () => { ws.alive = true; });
-
-  ws.on('message', (raw) => {
-    // простое ограничение частоты
-    const now = Date.now();
-    ws.bucket = Math.min(60, ws.bucket + ((now - ws.bucketT) / 1000) * 40); ws.bucketT = now;
-    if (--ws.bucket < 0) return;
-    ws.lastMsg = now;
-    let m; try { m = JSON.parse(raw); } catch { return; }
-    if (!m || typeof m !== 'object') return;
-
-    if (m.t === 'join' && !ws.room && !ws.joining) {
-      if ((m.v | 0) !== Sim.C.PROTO) return send(ws, { t: 'err', e: 'old' });
-      let room = null;
-      const qpicks = Array.isArray(m.picks) ? m.picks.slice(0, 10).map((v) => v | 0).filter((v, i, a) => v >= 0 && v < Sim.C.N_MODES && a.indexOf(v) === i) : [];
-      const qcfg = { kind: m.kind === 2 && qpicks.length ? 2 : m.kind ? 1 : 0, picks: qpicks, len: [1, 3, 5, 7].includes(m.len | 0) ? m.len | 0 : 3, mode: m.gm | 0, bots: m.bots === 0 ? 0 : 1, diff: [0, 1, 2].includes(m.diff | 0) ? m.diff | 0 : 1 };
-      if (m.mode === 'create') room = createRoom(false, { bots: 0 });
-      else if (m.mode === 'code') {
-        room = rooms.get(String(m.code || '').toUpperCase().trim());
-        if (!room) return send(ws, { t: 'err', e: 'noroom' });
-        if (room.game.humans().length >= Sim.C.MAX) return send(ws, { t: 'err', e: 'full' });
-      } else room = findPublicRoom(qcfg);
-
-      const g = room.game;
-      if (g.players.length >= Sim.C.MAX) {
-        const bot = g.players.find(p => p.bot);
-        if (bot) g.removePlayer(bot.id);
+    if (m.t === 'hello') {
+      if (conn.player || helloing) return;
+      helloing = true;
+      try {
+        const tok = typeof m.token === 'string' && /^[a-f0-9]{64}$/.test(m.token) ? m.token : null;
+        const user = tok ? await store.userByToken(tok) : null;
+        if (!user) { sendConn(conn, { t: 'err', m: 'unauthorized' }); return conn.close(4001); }
+        if (!conn.open) return;
+        const prev = online.get(user.id);
+        let profile = user.profile;
+        if (prev && prev.room) {                       // второй вход выбивает первый
+          profile = prev.profile;
+          const pc = prev.conn; prev.conn = null;
+          if (pc) { sendConn(pc, { t: 'err', m: 'replaced' }); pc.player = null; pc.close(4003); }
+          hub.leave(prev);
+          online.delete(user.id);
+        }
+        const mode = ['public', 'code', 'solo', 'rush'].includes(m.mode) ? m.mode : 'public';
+        const res = hub.join({ profile, conn, userId: user.id, admin: isAdmin(user.nick), biome: m.biome, cls: typeof m.cls === 'string' ? m.cls : undefined, mode: mode === 'solo' ? 'public' : mode, code: m.code });
+        if (res.error) { sendConn(conn, { t: 'err', m: res.error }); helloing = false; return; }
+        conn.player = res.player;
+        online.set(user.id, res.player);
+        user.profile = res.player.profile;
+        pendingSave.set(user.id, res.player.profile);
+      } catch (e) {
+        console.error('[ws hello]', e); conn.close(1011);
       }
-      ws.joining = true;
-      accounts.verify(m.acc).then((vf) => { const adm = !!(vf && accounts.isAdminKey(vf.k));
-      if (ws.readyState !== 1) { ws.joining = false; return; }
-      if (g.players.length >= Sim.C.MAX) { const bot2 = g.players.find((q) => q.bot); if (bot2) g.removePlayer(bot2.id); }
-      const p = g.addPlayer(cleanName(m.name), m.look, false); p.adm = adm; p.accKey = vf ? vf.k : ''; g.rosterDirty = true; ws.joining = false;
-      ws.room = room; ws.pid = p.id; room.clients.add(ws);
-      send(ws, { t: 'joined', id: p.id, code: room.code, pub: room.pub ? 1 : 0 });
-      const r = g.takeRoster(); if (r) { r.t = 'r'; broadcast(room, r); }
-      });
+      helloing = false;
       return;
     }
-    if (!ws.room) return;
-    const g = ws.room.game;
-    if (m.t === 'in') g.setInput(ws.pid, m.x, m.y, m.d ? 1 : 0);
-    else if (m.t === 'em') {
-      const e = m.e | 0; if (e >= 0 && e < Sim.C.N_EMO) broadcast(ws.room, { t: 'em', id: ws.pid, e });
-    } else if (m.t === 'ping') send(ws, { t: 'pong', ts: m.ts });
-    else if (m.t === 'cfg') { if (!ws.room.pub) g.setCfg(ws.pid, m); }
-    else if (m.t === 'start') {
-      if (ws.pid === g.hostId) { if (!g.startMatch()) send(ws, { t: 'info', e: 'need2' }); }
-    } else if (m.t === 'look') { // смена внешнего вида в ожидании
-      const p = g.players.find(q => q.id === ws.pid);
-      if (p && g.phase === 'lobby') { p.look = Sim.cleanLook(m.look); g.rosterDirty = true; }
-    }
-  });
-
-  ws.on('close', () => {
-    connCount--;
-    ipCount.set(ip, Math.max(0, (ipCount.get(ip) || 1) - 1));
-    const room = ws.room;
-    if (!room) return;
-    room.clients.delete(ws);
-    room.game.removePlayer(ws.pid);
-    if (room.clients.size === 0) rooms.delete(room.code);
-    else { const r = room.game.takeRoster(); if (r) { r.t = 'r'; broadcast(room, r); } }
-  });
-  ws.on('error', () => {});
+    if (m.t === 'ping') return sendConn(conn, { t: 'pong', n: +m.n || 0 });
+    if (conn.player) hub.onMessage(conn.player, m);
+  };
+  conn.onclose = () => {
+    clearInterval(rateTimer); clearTimeout(helloTimer); clearInterval(pingTimer);
+    const p = conn.player;
+    if (p && p.conn === conn) hub.disconnect(p);
+  };
 });
 
-// главный цикл
-let last = Date.now(), acc = 0, tick = 0;
-setInterval(() => {
-  const now = Date.now();
-  acc += Math.min(now - last, 100) / 1000; last = now;
-  while (acc >= TICK) {
-    acc -= TICK; tick++;
-    for (const room of rooms.values()) {
-      room.game.step(TICK);
-      { const g = room.game; // победа в матче с живыми игроками (публичная комната или по коду) → в таблицу лидеров
-        if (g.phase === 'lobby') room.mh = 0;
-        else if (g.phase !== 'final') room.mh = Math.max(room.mh || 0, g.players.filter((q) => !q.bot).length);
-        if (g.phase === 'final') {
-          if (!room.fin) {
-            room.fin = true;
-            const humans = g.players.filter((q) => !q.bot && q.rounds > 0);
-            const w = g.players.find((q) => q.id === g.ranking[0]);
-            // живых было двое и больше в течение матча (даже если кто-то вышел до конца)
-            if (Math.max(room.mh || 0, humans.length) >= 2 && w && !w.bot && w.accKey) { accounts.addWin(w.accKey); console.log('[win]', w.accKey, room.pub ? 'public' : 'code'); }
-            room.mh = 0;
-          }
-        } else room.fin = false; }
-      if (tick % SNAP_EVERY === 0) {
-        const r = room.game.takeRoster();
-        if (r) { r.t = 'r'; broadcast(room, r); }
-        const s = room.game.snapshot(); s.t = 's';
-        broadcast(room, JSON.stringify(s));
-      }
-    }
-  }
-}, 8);
+initStore().then(s => {
+  store = s;
+  server.listen(PORT, () => {
+    console.log('Dino Evolution ' + CONFIG.VERSION + ' — http://localhost:' + PORT + '  (хранилище: ' + store.kind + ')');
+    if (ADMINS.length) console.log('Админы: ' + ADMINS.join(', '));
+  });
+}).catch(e => { console.error('Не удалось запустить сервер:', e); process.exit(1); });
 
-// выкидываем «мёртвые» соединения
-setInterval(() => {
-  const now = Date.now();
-  for (const ws of wss.clients) {
-    if (!ws.alive || now - ws.lastMsg > 20000) { ws.terminate(); continue; }
-    ws.alive = false; try { ws.ping(); } catch {}
-  }
-}, 10000);
-
-server.listen(PORT, () => { accounts.startupTasks().catch((e) => console.error('startupTasks:', e.message)); accounts.getStore().count().then((n) => console.log('Аккаунтов в хранилище: ' + n)).catch((e) => console.error('Хранилище аккаунтов недоступно:', e.message)); console.log('Penguin Sumo server on :' + PORT + ' build ' + BUILD); console.log('Хранилище аккаунтов: ' + accounts.getStore().kind + (accounts.getStore().kind === 'file' ? ' (на бесплатном Render пропадёт при перезапуске — задайте DATABASE_URL)' : '')); });
+async function shutdown() { try { await flushSaves(); } catch (e) { /* ignore */ } process.exit(0); }
+process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);
