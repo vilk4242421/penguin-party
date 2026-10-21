@@ -1,1149 +1,1183 @@
-/* Dino Evolution — клиент: рендер, ввод, предсказание движения, снимки сервера, эффекты, HUD. */
-import * as THREE from 'three';
-import { buildWorld } from './world.js';
-import { DinoNest } from './dinonest.js';
-import { buildDino, animateDino, makeActor, makeNameTag, makeHpBar, buildEnemy, setOutline, animateEnemy, buildBoss, animateBoss, setCrown, setCosmetic, makeEggMesh } from './dinos.js';
-import * as Profile from './profile.js';
-import { connectOnline, connectLocal } from './net.js';
-import * as Audio from './audio.js';
-import { UI } from './ui.js';
+/* Пингвины v3 — клиент: 3D-арена, 8 режимов, турнир с пьедесталом, кликер, гардероб */
+(function () {
+'use strict';
+const { C, Game, MODES, RACE, SNOW_OBS } = Sim;
+const Cos = Cosmetics, Pro = Profile, GA = GameAudio, Sc = Scene;
+const $ = (id) => document.getElementById(id);
+const PR = C.PR;
+const TAU = Math.PI * 2;
+Pro.load();
+if (Pro.tampered) setTimeout(() => { try { toast('⚠️ Профиль был изменён вручную и сброшен'); } catch (e) {} }, 900);
+const P = Pro.P;
 
-const CONFIG = window.CONFIG, Sim = window.Sim, Core = window.RoomsCore, T = window.T, TN = window.TN;
-const $ = id => document.getElementById(id);
-const DT = 1 / CONFIG.TICK_RATE, TWO_PI = Math.PI * 2;
-const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
-const wrapA = a => { while (a > Math.PI) a -= TWO_PI; while (a < -Math.PI) a += TWO_PI; return a; };
-const lerpA = (a, b, t) => a + wrapA(b - a) * t;
-const IS_TOUCH = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
-if (IS_TOUCH) document.body.classList.add('touch');
-const F = Core.F, ARCH_IDS = Core.ARCH_IDS;
+/* ================= локальное хранилище (мелочи) ================= */
+const ls = {
+  get(k, d) { try { const v = localStorage.getItem('ps_' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('ps_' + k, JSON.stringify(v)); } catch (e) {} },
+};
 
-// ---------------------------------------------------------------- рендерер
-const canvas = $('c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: !IS_TOUCH, powerPreference: 'high-performance' });
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = IS_TOUCH ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;   // на телефоне тени проще и дешевле
-const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 900);
-let scene = new THREE.Scene();
-let qualityPref = 'auto', qualityName = IS_TOUCH ? 'med' : 'high';
-try { qualityPref = localStorage.getItem('dino_q') || 'auto'; } catch (e) { /* ignore */ }
-if (qualityPref !== 'auto') qualityName = qualityPref;
-let sens = 1; try { sens = parseFloat(localStorage.getItem('dino_sens') || '1') || 1; } catch (e) { /* ignore */ }
+/* ================= локализация ================= */
+const L = {
+  ru: {
+    title: 'Пингвины: Ледяная арена', tag: 'Скользи, толкай, побеждай!', yourName: 'Твоё имя',
+    online: 'Играть онлайн', onlineSub: 'Быстрый турнир с живыми игроками', tournament: 'Турнир', modes: 'Режимы', friends: 'С друзьями (по коду)',
+    create: 'Создать комнату', join: 'Войти', offline: 'Против ботов', offlineSub: 'Без интернета — быстрый турнир', install: '📲 Установить',
+    clicker: 'Симулятор', wardrobe: 'Гардероб', achievements: 'Награды', settings: 'Настройки', back: 'Назад',
+    leaders: 'Лидеры', lbWins: '🏆 Победы', lbCoins: '🪙 Монеты', lbNote: 'Победы считаются в онлайн-матчах с живыми игроками. В списке — игроки с аккаунтом.', lbEmpty: 'Пока никого нет — стань первым!', lbLoad: 'Загрузка…', lbWinsU: 'поб.',
+    account: 'Аккаунт', accSynced: 'Золото, покупки и прогресс сохраняются на сервере — зайди с другого устройства под этим ником и паролем.', accOut: 'Выйти', accInfo: 'Создай аккаунт, чтобы прогресс не терялся и был на всех устройствах. Без аккаунта можно играть как гость.', accUser: 'Ник аккаунта', accPass: 'Пароль (от 6 символов)', accRec: 'Код восстановления', accLogin: 'Войти', accReg: 'Создать аккаунт', accForgot: 'Забыл пароль?', accReset: 'Сменить пароль', accE: { name: 'Ник: 3–16 символов, буквы, цифры, _ и -', pass: 'Пароль: от 6 символов', taken: 'Такой ник уже занят', creds: 'Неверный ник или пароль', wait: 'Слишком много попыток, подожди немного', net: 'Нет связи с сервером', err: 'Ошибка, попробуй ещё раз' }, accDone: (n) => `Добро пожаловать, ${n}!`, accRecShow: (c) => `Твой код восстановления: ${c}\nЗапиши его — это единственный способ вернуть аккаунт при потере пароля.`, accSt: { ok: 'Синхронизировано', offline: 'Нет связи — синхронизация позже', rejected: 'Подозрительное изменение отклонено, профиль восстановлен с сервера', conflict: 'Профиль обновлён с другого устройства', expired: 'Сессия истекла — войди снова', err: 'Ошибка синхронизации' }, accGuest: 'Гость', accNoAdm: 'сервер не считает этот ник админом', accNoAdmEnv: 'на сервере не задана переменная ADMINS',
+    sfx: 'Звуки', music: 'Музыка', vibe: 'Вибрация', language: 'Язык', update: '🔄 Обновить игру',
+    tRand: '🎲 Случайные', tPick: '🎯 Свои режимы', pickHint: 'Выбери от 2 до 10 режимов — они пойдут по порядку', pickSel: (n) => `Выбрано режимов: ${n}`, sumPick: (n, b) => `🎯 Свои режимы: ${n}${b ? ' · с ботами' : ''}`,
+    tankDead: (n) => `💥 Подбит! Возрождение на базе через ${n}`, gotFlag: 'Флаг у тебя! Вези на базу', flagCap: 'Флаг захвачен!',
+    tourNote: 'Несколько разных режимов подряд. За каждое место — очки, а в конце — пьедестал. Последний окажется в клетке!',
+    diffL: 'Сложность ботов:', diffS: 'Боты:', diffs: ['Лёгкие', 'Средние', 'Тяжёлые'], tourLen: 'Сколько режимов в турнире:', tourBots: 'Недостающие игроки:', botsOn: '🤖 С ботами (до 5 игроков)', botsOff: '👥 Без ботов (только живые)',
+    tInfoOn: 'Если игроков меньше пяти, добавим ботов. Очки за места: 4 · 3 · 2 · 1 · 0.',
+    tInfoOff: 'Играют только живые игроки: очки = число игроков − место. Например, 5 игроков: 4·3·2·1·0, 4 игрока: 3·2·1·0, 3: 2·1·0, 2: 1·0.',
+    vsBots: 'Против ботов', offlineSub2: 'офлайн, сразу играем', onlineTour: 'Онлайн-турнир', onlineTourSub: 'с живыми игроками', withFriends: 'С друзьями (комната)', onlineShort: 'Онлайн',
+    rounds: 'Раундов:', pickMode: 'Режим:', roomSet: 'Настройки комнаты', format: 'Формат:', fTour: '🏆 Турнир', fSeries: '🎮 Один режим', ok: 'Готово',
+    enter: 'Ввести', promoPh: 'Секретный код', badCode: 'Такого кода нет', codeNet: 'Нет связи с сервером — коды работают только онлайн', codeWait: 'Слишком много попыток, подожди минуту', codeOk: (n) => `🎉 Получено: ${n}!`, codeCoins: (n) => `🎉 +${n} 🪙 золота!`, codeC67: (n) => `🎉 +${n} монет 67!`, codeHad: 'Этот приз уже у тебя — надето!',
+    lockClicker: '🎣 Выдаётся за прохождение симулятора', lockCode: '🔑 Выдаётся по секретному коду', lkClicker: '🎣 за прохождение симулятора', lkCode: '🔑 по секретному коду',
+    tabs: 'Облик', tabc: 'Цвет', tabp: 'Узор', tabh: 'Шляпа', tabe: 'Очки', tabt: 'След', tabk: 'Машина',
+    dash: 'РЫВОК', go: 'ВПЕРЁД!', round: 'Раунд', draw: 'Ничья!', youWon: 'ТЫ ПОБЕДИЛ!', fell: 'Ты выбыл! 🌊', watching: 'Смотришь за боем', nextRound: 'Войдёшь в следующем раунде',
+    alive: 'Живы', connecting: 'Подключаемся…', waking: 'Сервер просыпается, подождите до минуты…',
+    noServer: 'Сервер недоступен. Попробуй позже или играй против ботов.', noRoom: 'Комната не найдена', full: 'Комната заполнена',
+    lost: 'Соединение потеряно', old: 'Вышла новая версия — обновляем игру…', room: 'Комната', copied: 'Код скопирован!',
+    online_n: (n) => `Сейчас онлайн: ${n}`, enterCode: 'Введи код из 4 букв', youTag: 'ты',
+    lobbyTitle: 'Комната ожидания', lobbyWait: 'Ждём друзей… нужно минимум 2 игрока', lobbyAuto: (n) => `Старт через ${n}…`, lobbyAutoWait: 'Ищем соперников…',
+    lobbyReady: 'Все готовы? Жми СТАРТ!', lobbyWaitHost: 'Ждём, пока хозяин начнёт игру', start: 'СТАРТ', share: 'Позвать друзей', hintLobby: 'Пока ждёте — потренируйтесь: рывок, толчки, эмоции!',
+    sumTour: (n, b) => `🏆 Турнир: ${n} ${n === 1 ? 'режим' : n < 5 ? 'режима' : 'режимов'} · ${b ? '🤖 с ботами' : '👥 без ботов'}`, sumSeries: (m, n, b) => `${m}${n > 1 ? ' × ' + n : ''} · ${b ? '🤖 с ботами' : '👥 без ботов'}`, chaosL: '🌪 Хаос', botsL: '🤖 Боты',
+    notEnough: 'Не хватает монет 🪙', bought: 'Куплено!', achUnlocked: 'Достижение', daily: 'Ежедневный подарок', windWarn: '💨 Ветер!', earned: 'Заработано', level: 'Ур.',
+    updating: 'Обновляем…', joinRoomHint: 'Нажми «Войти», чтобы попасть в комнату друзей', needTwo: 'Нужно минимум 2 игрока (или включи ботов)',
+    pk: ['Сила!', 'Заморозка!', 'Ударная волна!', 'Щит!'], roundN: (a, b) => `Раунд ${a} из ${b}`, results: 'Итоги раунда', nextIn: 'Дальше через', pts: 'очк.',
+    finalT: 'Итоги', winnerIs: 'Победитель', yourPlace: (n) => `Твоё место: ${n}`, caged: 'Ты в клетке! 😅', again: '🔁 Ещё раз', toMenu: '🏠 В меню', leave: '✖ Выйти', newGameIn: 'Новая игра через',
+    laps: (n) => `Круг ${n}/2`, lap: (n) => `Круг ${n}!`, fin: (n) => `Финиш — ${n} место!`, pass: 'Бомба у тебя! Передай!', youHot: '💣 БОМБА У ТЕБЯ!', youSnow: '⛄ ТЫ СНЕГОВИК! Лови пингвинов!', hurt: 'Ай!', fishGot: (n) => `+${n} 🐟`,
+    kingHint: '👑 Лови того, у кого корона!', youCrown: '👑 КОРОНА У ТЕБЯ! Убегай!', wait2: 'Ждём соперников…',
+  },
+  en: {
+    title: 'Penguins: Ice Arena', tag: 'Slide, shove, win!', yourName: 'Your name',
+    online: 'Play online', onlineSub: 'Quick tournament with real players', tournament: 'Tournament', modes: 'Modes', friends: 'With friends (room code)',
+    create: 'Create room', join: 'Join', offline: 'Vs bots', offlineSub: 'No internet — quick tournament', install: '📲 Install',
+    clicker: 'Simulator', wardrobe: 'Wardrobe', achievements: 'Awards', settings: 'Settings', back: 'Back',
+    leaders: 'Leaders', lbWins: '🏆 Wins', lbCoins: '🪙 Coins', lbNote: 'Wins are counted in online matches with real players. Only players with an account are listed.', lbEmpty: 'Nobody yet — be the first!', lbLoad: 'Loading…', lbWinsU: 'wins',
+    account: 'Account', accSynced: 'Coins, purchases and progress are saved on the server — sign in with this name and password on another device.', accOut: 'Sign out', accInfo: 'Create an account so progress is never lost and works on every device. You can also play as a guest.', accUser: 'Account name', accPass: 'Password (6+ chars)', accRec: 'Recovery code', accLogin: 'Sign in', accReg: 'Create account', accForgot: 'Forgot password?', accReset: 'Reset password', accE: { name: 'Name: 3–16 chars, letters, digits, _ and -', pass: 'Password: 6+ characters', taken: 'That name is taken', creds: 'Wrong name or password', wait: 'Too many tries, wait a bit', net: 'No connection to the server', err: 'Error, try again' }, accDone: (n) => `Welcome, ${n}!`, accRecShow: (c) => `Your recovery code: ${c}\nWrite it down — it is the only way back into the account if you lose the password.`, accSt: { ok: 'Synced', offline: 'Offline — will sync later', rejected: 'A suspicious change was rejected, profile restored from the server', conflict: 'Profile updated from another device', expired: 'Session expired — sign in again', err: 'Sync error' }, accGuest: 'Guest', accNoAdm: 'the server does not treat this name as admin', accNoAdmEnv: 'ADMINS is not set on the server',
+    sfx: 'Sounds', music: 'Music', vibe: 'Vibration', language: 'Language', update: '🔄 Update game',
+    tRand: '🎲 Random', tPick: '🎯 Pick modes', pickHint: 'Pick 2 to 10 modes — they play in this order', pickSel: (n) => `Modes picked: ${n}`, sumPick: (n, b) => `🎯 Picked modes: ${n}${b ? ' · with bots' : ''}`,
+    tankDead: (n) => `💥 Destroyed! Respawn at base in ${n}`, gotFlag: 'You have the flag! Get home', flagCap: 'Flag captured!',
+    tourNote: 'Several different modes in a row. Every place scores points, then comes the podium. Last place goes in the cage!',
+    diffL: 'Bot difficulty:', diffS: 'Bots:', diffs: ['Easy', 'Medium', 'Hard'], tourLen: 'Modes in the tournament:', tourBots: 'Missing players:', botsOn: '🤖 With bots (up to 5 players)', botsOff: '👥 No bots (real players only)',
+    tInfoOn: 'If fewer than five players, bots join. Points by place: 4 · 3 · 2 · 1 · 0.',
+    tInfoOff: 'Only real players: points = players − place. E.g. 5 players: 4·3·2·1·0, 4 players: 3·2·1·0, 3: 2·1·0, 2: 1·0.',
+    vsBots: 'Vs bots', offlineSub2: 'offline, play right away', onlineTour: 'Online tournament', onlineTourSub: 'with real players', withFriends: 'With friends (room)', onlineShort: 'Online',
+    rounds: 'Rounds:', pickMode: 'Mode:', roomSet: 'Room settings', format: 'Format:', fTour: '🏆 Tournament', fSeries: '🎮 Single mode', ok: 'Done',
+    enter: 'Enter', promoPh: 'Secret code', badCode: 'No such code', codeNet: 'No connection to the server — codes need internet', codeWait: 'Too many tries, wait a minute', codeOk: (n) => `🎉 Unlocked: ${n}!`, codeCoins: (n) => `🎉 +${n} 🪙 gold!`, codeC67: (n) => `🎉 +${n} 67-coins!`, codeHad: 'You already have it — equipped!',
+    lockClicker: '🎣 Given for completing the simulator', lockCode: '🔑 Unlocked with a secret code', lkClicker: '🎣 for completing the simulator', lkCode: '🔑 secret code',
+    tabs: 'Skin', tabc: 'Color', tabp: 'Pattern', tabh: 'Hat', tabe: 'Eyewear', tabt: 'Trail', tabk: 'Car',
+    dash: 'DASH', go: 'GO!', round: 'Round', draw: 'Draw!', youWon: 'YOU WIN!', fell: 'You are out! 🌊', watching: 'Spectating', nextRound: 'You join next round',
+    alive: 'Alive', connecting: 'Connecting…', waking: 'Server is waking up, up to a minute…',
+    noServer: 'Server unavailable. Try later or play vs bots.', noRoom: 'Room not found', full: 'Room is full',
+    lost: 'Connection lost', old: 'A new version is out — updating…', room: 'Room', copied: 'Code copied!',
+    online_n: (n) => `Online now: ${n}`, enterCode: 'Enter a 4-letter code', youTag: 'you',
+    lobbyTitle: 'Waiting room', lobbyWait: 'Waiting for friends… need at least 2 players', lobbyAuto: (n) => `Starting in ${n}…`, lobbyAutoWait: 'Looking for opponents…',
+    lobbyReady: 'Everyone ready? Hit START!', lobbyWaitHost: 'Waiting for the host to start', start: 'START', share: 'Invite friends', hintLobby: 'While waiting, practice: dash, bump, emotes!',
+    sumTour: (n, b) => `🏆 Tournament: ${n} mode${n === 1 ? '' : 's'} · ${b ? '🤖 with bots' : '👥 no bots'}`, sumSeries: (m, n, b) => `${m}${n > 1 ? ' × ' + n : ''} · ${b ? '🤖 with bots' : '👥 no bots'}`, chaosL: '🌪 Chaos', botsL: '🤖 Bots',
+    notEnough: 'Not enough coins 🪙', bought: 'Purchased!', achUnlocked: 'Achievement', daily: 'Daily gift', windWarn: '💨 Wind!', earned: 'Earned', level: 'Lv.',
+    updating: 'Updating…', joinRoomHint: 'Press “Join” to enter your friends’ room', needTwo: 'Need at least 2 players (or enable bots)',
+    pk: ['Power!', 'Freeze!', 'Shockwave!', 'Shield!'], roundN: (a, b) => `Round ${a} of ${b}`, results: 'Round results', nextIn: 'Next in', pts: 'pts',
+    finalT: 'Results', winnerIs: 'Winner', yourPlace: (n) => `Your place: ${n}`, caged: 'You are caged! 😅', again: '🔁 Again', toMenu: '🏠 Menu', leave: '✖ Leave', newGameIn: 'New game in',
+    laps: (n) => `Lap ${n}/2`, lap: (n) => `Lap ${n}!`, fin: (n) => `Finished — place ${n}!`, pass: 'You have the bomb! Pass it!', youHot: '💣 YOU HAVE THE BOMB!', youSnow: '⛄ YOU ARE A SNOWMAN! Catch the penguins!', hurt: 'Ouch!', fishGot: (n) => `+${n} 🐟`,
+    kingHint: '👑 Chase the crown holder!', youCrown: '👑 YOU HAVE THE CROWN! Run!', wait2: 'Waiting for opponents…',
+  },
+};
+let lang = ls.get('lang', null);
+if (!lang) { const l = (navigator.language || 'ru').slice(0, 2).toLowerCase(); lang = ['ru', 'uk', 'be', 'kk', 'uz', 'tg', 'hy', 'az', 'ky'].includes(l) ? 'ru' : 'en'; }
+const T = (k, ...a) => { const v = (L[lang] && L[lang][k]) ?? L.en[k] ?? k; return typeof v === 'function' ? v(...a) : v; };
+const MT = (id) => MODES[id][lang];
+// название и подзаголовок: одна строка, размер подбирается под ширину карточки
+function fitTitle() {
+  for (const [el, max, min] of [[document.querySelector('#menu h1'), 20, 12]]) {
+    if (!el) continue;
+    el.style.whiteSpace = 'nowrap'; el.style.fontSize = max + 'px';
+    const room = el.parentElement.clientWidth - 32;
+    if (room <= 0) continue;
+    let s = max; while (s > min && el.scrollWidth > room) { s -= 0.5; el.style.fontSize = s + 'px'; }
+  }
+}
+window.addEventListener('resize', () => fitTitle());
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-t]').forEach((el) => { el.innerHTML = T(el.dataset.t); });
+  document.querySelectorAll('[data-ph]').forEach((el) => { el.placeholder = T(el.dataset.ph); });
+  $('bLang').textContent = lang.toUpperCase();
+  document.title = T('title');
+  fitTitle();
+  if (typeof renderDiff === 'function') renderDiff();
+}
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const EMOJI = ['😂', '😡', '👍', '🐟', '😎', '🥶', '💀', '❤️'];
+const DASH_IC = ['⚡', '🚀', '⚡', '⚡', '❄️', '⚡', '⚡', '⬆️', '⚡', '⚡', '⚡', '⚡', '⚡', '🚀', '⚡', '⚡', '⬆️', '⚡', '💥'];
 
-let resScale = 1;   // адаптивное разрешение: 0.55…1 от базового (понижается само, если FPS низкий)
-function applyRenderQuality() {
-  const Q = CONFIG.QUALITY[qualityName];
-  window.__dinoRes = resScale; window.__dinoQ = { low: 0.6, med: 0.8, high: 1 }[qualityName] || 1;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, IS_TOUCH ? Q.prT : Q.pr) * resScale);
-  renderer.setSize(window.innerWidth, window.innerHeight, false);
-  camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
-  if (S && S.world) S.world.applyQuality(qualityName);
-  if (menu3d.world) menu3d.world.applyQuality(qualityName);
+/* ================= Яндекс Игры SDK (безопасно, если его нет) ================= */
+const Y = { sdk: null, player: null, inAd: false };
+function initYandex() {
+  if (typeof YaGames === 'undefined') return Promise.resolve();
+  return YaGames.init().then((sdk) => {
+    Y.sdk = sdk;
+    try { const l = sdk.environment.i18n.lang; if (ls.get('lang', null) === null) lang = ['ru', 'be', 'kk', 'uk', 'uz', 'hy', 'az', 'ky', 'tg'].includes(l) ? 'ru' : 'en'; } catch (e) {}
+    try { sdk.on && sdk.on('game_api_pause', () => setPaused(true)); sdk.on && sdk.on('game_api_resume', () => setPaused(false)); } catch (e) {}
+    return sdk.getPlayer({ scopes: false }).then((p) => { Y.player = p; }).catch(() => {});
+  }).catch(() => {});
 }
-window.addEventListener('resize', applyRenderQuality);
+function yReady() { try { Y.sdk && Y.sdk.features.LoadingAPI && Y.sdk.features.LoadingAPI.ready(); } catch (e) {} }
+function yPlay(on) { try { const g = Y.sdk && Y.sdk.features.GameplayAPI; if (g) on ? g.start() : g.stop(); } catch (e) {} }
+function yAd(cb) {
+  if (!Y.sdk || !Y.sdk.adv) return cb();
+  let done = false; const fin = () => { if (done) return; done = true; Y.inAd = false; GA.setHardMute(paused); cb(); };
+  try { Y.inAd = true; GA.setHardMute(true); Y.sdk.adv.showFullscreenAdv({ callbacks: { onClose: fin, onError: fin } }); setTimeout(fin, 60000); } catch (e) { fin(); }
+}
+function yLeaderboard(wins) {
+  try {
+    if (!Y.sdk || !Y.sdk.getLeaderboards || !Y.player || (Y.player.getMode && Y.player.getMode() === 'lite')) return;
+    Y.sdk.getLeaderboards().then((lb) => lb.setLeaderboardScore('wins', wins)).catch(() => {});
+  } catch (e) {}
+}
 
-// ---------------------------------------------------------------- 3D-сцена меню (витрина динозавра и яйцо)
-const menu3d = { scene: new THREE.Scene(), group: new THREE.Group(), dino: null, egg: null, world: null, t: 0, hatch: null };
-(function initMenu3d() {
-  const s = menu3d.scene;
-  menu3d.world = buildWorld(s, 'forest');       // живой фон — лес
-  menu3d.world.root.traverse(o => { if (o.isInstancedMesh) o.visible = false; });
-  s.add(menu3d.group);
-  const plat = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.9, 0.4, 64), new THREE.MeshStandardMaterial({ color: 0x8a7a5a, roughness: 0.95 }));
-  plat.position.y = -0.2; plat.receiveShadow = true; menu3d.group.add(plat);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(2.55, 0.12, 12, 64), new THREE.MeshStandardMaterial({ color: 0xc9a86a, roughness: 0.6 })); rim.rotation.x = Math.PI / 2; rim.position.y = 0.02; menu3d.group.add(rim);
-  menu3d.group.position.set(0, 0, 0);
-})();
-window.__menu3d = menu3d;
-function menuSetDino(o) {
-  if (menu3d.dino) { menu3d.group.remove(menu3d.dino); menu3d.dino = null; }
-  if (!o) return;
-  menu3d.dino = buildDino(o); menu3d.dino.scale.setScalar(Math.max(1.3, Sim.scaleOf(o.level || 1) * 1.5));
-  menu3d.group.add(menu3d.dino);
-  if (menu3d.egg) { menu3d.group.remove(menu3d.egg); menu3d.egg = null; }
+/* ================= состояние ================= */
+let mode = 'menu'; // menu | offline | online
+let paused = false;
+let game = null;
+let myId = 0, roomCode = '', roomPub = false, hostId = 0;
+let roster = new Map();
+let cfg = { kind: 0, len: 3, mode: 0, bots: 0, chaos: 0, diff: 1, picks: [] };
+let diffSel = +ls.get('diff', 1); if (![0, 1, 2].includes(diffSel)) diffSel = 1;
+let V = null, lastMap = null;
+let acc = 0, lastT = 0, connectSeq = 0, roundsPlayed = 0;
+const anim = new Map();   // id -> {face, walk, trail}
+const emotes = new Map();
+let goFlash = 0, windFlash = 0, lastCountNum = 0;
+let finalShown = false, finalInfo = null, matchEarn = 0, rKo = 0, flash = 0, shake = 0;
+let pendingReload = false, cam = null, camF = { x: 0, y: 0, init: false }, lastMode = -1, lastRound = 0;
+let tourSel = Object.assign({ len: 3, bots: 1, kind: 0, picks: [] }, ls.get('tour', {}));
+function togglePick(arr, id) { const i = arr.indexOf(id); if (i >= 0) arr.splice(i, 1); else if (arr.length < 10) arr.push(id); return arr; }
+const noTanks = () => mode === 'online' && [...roster.values()].filter((r) => !r.bot).length > 4;
+const tankOff = (m) => m.key === 'tanks' && noTanks();
+function pickHtml(arr) { return MODES.map((m) => { const i = arr.indexOf(m.id); return `<button ${tankOff(m) ? 'disabled style="opacity:.3"' : ''} class="${i >= 0 ? 'on' : ''}" data-p="${m.id}" title="${esc(m[lang].name)}">${m.icon}${i >= 0 ? `<i>${i + 1}</i>` : ''}</button>`; }).join(''); }
+function tourCfg() { const pk = tourSel.kind === 2 && tourSel.picks.length >= 2; return pk ? { kind: 2, picks: tourSel.picks.slice(), len: tourSel.picks.length, mode: 0 } : { kind: 0, len: tourSel.len }; }
+let modeSel = ls.get('modesel', { mode: 0, len: 1 });
+let cfgWorking = null;
+
+function setPaused(p) { paused = p; GA.setHardMute(p || Y.inAd); if (!p) lastT = performance.now(); }
+document.addEventListener('visibilitychange', () => setPaused(document.hidden));
+const lookNow = () => Object.assign({}, P.look);
+
+/* ================= сеть ================= */
+const net = { ws: null, snaps: [], me: null, ping: 0, lastSent: 0, lastIn: '', timer: null, pingTimer: null };
+
+function serverBase() {
+  const q = new URLSearchParams(location.search).get('server');
+  let u = q || (window.GAME_CONFIG && window.GAME_CONFIG.SERVER_URL) || '';
+  if (!u && window.GAME_CONFIG && window.GAME_CONFIG.FALLBACK_SERVER && !/^https?:$/.test(location.protocol) || (!u && location.hostname === 'localhost' && !location.port && window.GAME_CONFIG && window.GAME_CONFIG.FALLBACK_SERVER)) u = window.GAME_CONFIG.FALLBACK_SERVER;
+  if (!u) {
+    if (location.protocol === 'file:') return '';
+    if (/yandex\.(net|ru|com)$/.test(location.hostname)) return '';
+    u = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
+  }
+  return u.replace(/\/+$/, '');
 }
-function makeEgg(colorHex) {
-  // гладкая скорлупа: пятна нарисованы на текстуре, наружу ничего не выступает
-  const g = makeEggMesh(colorHex); g.position.y = 1.18;
-  const w = new THREE.Group(); w.add(g); w.userData = Object.assign({ shell: g }, g.userData); return w;
+const httpBase = (u) => u.replace(/^ws/, 'http');
+
+function fetchOnline() {
+  const base = serverBase(); const el = $('online');
+  if (!base) { el.textContent = ''; return; }
+  const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 4000);
+  fetch(httpBase(base) + '/stats', { signal: ctl.signal, cache: 'no-store' }).then((r) => r.json()).then((j) => {
+    el.textContent = T('online_n', j.players);
+  }).catch(() => { el.textContent = ''; }).finally(() => clearTimeout(to));
 }
-function menuSetDinoKeepEgg(o) {
-  if (menu3d.dino) { menu3d.group.remove(menu3d.dino); menu3d.dino = null; }
-  menu3d.dino = buildDino(o); menu3d.group.add(menu3d.dino);
-}
-function menuShowEgg(colorHex) {
-  menuSetDino(null);
-  if (menu3d.egg) { menu3d.group.remove(menu3d.egg); menu3d.egg = null; }
-  menu3d.egg = makeEgg(colorHex); menu3d.group.add(menu3d.egg);
-}
-function menuHatch(o, done) {
-  menuShowEgg(o.color); const eggTxt = $('eggtxt'); eggTxt.style.display = 'block'; eggTxt.textContent = T('hatching');
-  const t0 = performance.now();
-  menu3d.hatch = { t0, o, done, burst: false, shards: [] };
-}
-function updateMenu3d(dt) {
-  menu3d.t += dt;
-  const h = menu3d.hatch;
-  if (h) {
-    const t = (performance.now() - h.t0) / 1000, egg = menu3d.egg;
-    if (t < 3 && egg) {
-      const k = Math.min(1, t / 3);
-      egg.rotation.z = Math.sin(t * (6 + k * 18)) * (0.05 + k * 0.22); egg.rotation.x = Math.cos(t * (5 + k * 14)) * (0.03 + k * 0.12);
-      egg.userData.crack(k);
-      if (Math.floor(t * 3) !== h.lastBeep) { h.lastBeep = Math.floor(t * 3); Audio.sfx('hit'); }
-    } else if (!h.burst) {
-      h.burst = true; Audio.sfx('evo');
-      // верхушка отлетает, нижняя половина остаётся и уходит в землю; осколки разлетаются
-      if (egg) {
-        egg.rotation.set(0, 0, 0);
-        const top = egg.userData.hi; h.cap = top; h.capV = new THREE.Vector3(0.6, 4.2, 0.4); h.lo = egg.userData.lo;
-        h.eggGroup = egg; h.lo.userData.y0 = 0;
+
+function showMsg(t) { $('msg').textContent = t || ''; }
+
+/* joinMode: quick | create | code;  ex: {kind,len,gm,bots,cfg} */
+function connect(joinMode, code, ex) {
+  ex = ex || {};
+  const base = serverBase();
+  const back = () => { const sc = ['tourney', 'modes'].find((s) => !$(s).classList.contains('hide')); return sc; };
+  if (!base) { showMsg(T('noServer')); toast(T('noServer')); return; }
+  GA.init();
+  const seq = ++connectSeq;
+  const deadline = Date.now() + 75000; // бесплатные хостинги «просыпаются» до минуты
+  const t0 = Date.now();
+  showMsg(T('connecting')); if (back()) toast(T('connecting'));
+  const stale = () => seq !== connectSeq || mode !== 'menu';
+  const giveUp = (txt) => { if (seq === connectSeq && mode === 'menu') { showMsg(txt || T('noServer')); toast(txt || T('noServer')); } };
+
+  function attempt() {
+    if (stale()) return;
+    let ws;
+    try { ws = new WebSocket(base); } catch (e) { return giveUp(); }
+    net.ws = ws; net.snaps = []; net.me = null;
+    let joined = false, done = false;
+    const retry = () => {
+      if (done) return; done = true; clearTimeout(to);
+      try { ws.close(); } catch (e) {}
+      if (net.ws === ws) net.ws = null;
+      if (stale()) return;
+      if (Date.now() < deadline) { showMsg(Date.now() - t0 > 4000 ? T('waking') : T('connecting')); setTimeout(attempt, 2500); }
+      else giveUp();
+    };
+    const to = setTimeout(() => { if (!joined) retry(); }, 9000);
+
+    ws.onopen = () => ws.send(JSON.stringify({ t: 'join', v: C.PROTO, acc: Pro.Acc.token ? { name: Pro.Acc.name, token: Pro.Acc.token } : undefined, mode: joinMode, code, name: P.name || 'Penguin', look: lookNow(), kind: ex.kind || 0, picks: ex.picks || [], len: ex.len || 3, gm: ex.gm || 0, bots: ex.bots === 0 ? 0 : 1, diff: ex.diff == null ? diffSel : ex.diff }));
+    ws.onerror = () => { if (!joined) retry(); };
+    ws.onclose = () => {
+      clearTimeout(to);
+      if (!joined) { retry(); return; }
+      if (net.ws === ws) { net.ws = null; leaveToMenu(); showMsg(T('lost')); }
+    };
+    ws.onmessage = (ev) => {
+      let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      switch (m.t) {
+        case 'joined':
+          if (stale()) { try { ws.close(); } catch (e) {} return; }
+          joined = true; done = true; clearTimeout(to); myId = m.id; roomCode = m.code; roomPub = !!m.pub; startPlay('online');
+          if (joinMode === 'create' && ex.cfg) wsSend(Object.assign({ t: 'cfg' }, ex.cfg));
+          break;
+        case 'err':
+          done = true; clearTimeout(to); try { ws.close(); } catch (e) {} if (net.ws === ws) net.ws = null;
+          if (m.e === 'old') { showMsg(T('old')); setTimeout(hardReload, 1200); } else giveUp(m.e === 'full' ? T('full') : T('noRoom'));
+          break;
+        case 'info': if (m.e === 'need2') toast(T('needTwo')); break;
+        case 'r': onRoster(m); break;
+        case 's': onSnapshot(m); break;
+        case 'em': emotes.set(m.id, { e: m.e, until: performance.now() + 2200 }); GA.play('emote'); break;
+        case 'pong': net.ping = Math.round(Date.now() - m.ts); break;
       }
-      for (let i = 0; i < 14; i++) {
-        const geo = new THREE.SphereGeometry(0.24, 6, 4, Math.random() * 6, 1.2, 1.0 + Math.random(), 0.9);
-        const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xf3ead6, roughness: 0.6, side: THREE.DoubleSide }));
-        const a = i / 14 * TWO_PI; m.position.set(Math.cos(a) * 0.5, 1.7, Math.sin(a) * 0.5); m.castShadow = true;
-        m.userData.v = new THREE.Vector3(Math.cos(a) * (2 + Math.random() * 1.5), 2.5 + Math.random() * 2, Math.sin(a) * (2 + Math.random() * 1.5)); menu3d.group.add(m); h.shards.push(m);
-      }
-      menuSetDinoKeepEgg({ cls: h.o.cls, color: h.o.color, level: 1, evo: {} }); menu3d.dino.scale.setScalar(0.18); menu3d.dino.position.y = 0.35; h.grow = 0;
-      $('eggtxt').textContent = T('hatched');
-    } else {
-      for (const m of h.shards) { m.userData.v.y -= 9 * dt; m.position.addScaledVector(m.userData.v, dt); m.rotation.x += dt * 5; m.rotation.z += dt * 4; if (m.position.y < 0.08) { m.position.y = 0.08; m.userData.v.set(0, 0, 0); } }
-      if (h.cap) { h.capV.y -= 9 * dt; h.cap.position.addScaledVector(h.capV, dt); h.cap.rotation.z += dt * 3; h.cap.rotation.x += dt * 1.5; if (h.cap.position.y < -1.0) { h.cap.visible = false; } }
-      h.grow = Math.min(1, h.grow + dt * 1.1);
-      const k = 1 - Math.pow(1 - h.grow, 3);
-      // скорлупа исчезает раньше, чем детёныш становится больше неё
-      if (h.lo) { h.lo.position.y = -k * 2.4; if (k > 0.55 && h.eggGroup) { menu3d.group.remove(h.eggGroup); h.eggGroup = null; h.lo = null; menu3d.egg = null; } }
-      menu3d.dino.scale.setScalar(0.18 + k * 1.12); menu3d.dino.position.y = 0.35 * (1 - k);
-      if (h.grow >= 1 && !h.finishing) { h.finishing = true; setTimeout(() => { for (const m of h.shards) menu3d.group.remove(m); if (h.eggGroup) menu3d.group.remove(h.eggGroup); menu3d.egg = null; $('eggtxt').style.display = 'none'; menu3d.hatch = null; h.done && h.done(); }, 1400); }
-    }
+    };
   }
-  if (menu3d.dino) { menu3d.dino.rotation.y += dt * 0.6; animateDino(menu3d.dino, menu3d.t, menu3d.dino.userData.dbgSpeed || 0, dt, menu3d.dino.userData.dbgSt || {}); }
-  // камера: чуть вбок, чтобы карточка слева не закрывала динозавра
-  const wide = window.innerWidth > 900, ox = wide ? 2.1 : 0, by = menu3d.world.sim.def.arenaY + 0.25;
-  camera.position.set(Math.sin(menu3d.t * 0.12) * 0.5 + (wide ? 0 : 0), by + 2.6, 6.6); camera.lookAt(0, by + (wide ? 1.2 : 2.3), 0);
-  camera.fov = wide ? 50 : 66; camera.updateProjectionMatrix();
-  menu3d.group.position.set(ox, by, 0);
-  menu3d.world.update(camera.position, { x: 0, y: by, z: 0 }, menu3d.t, dt, 0.42, 0);
+  attempt();
 }
 
-// ---------------------------------------------------------------- ввод
-const keys = new Set();
-const input = { yaw: 0, pitch: 0.28, zoom: 1, atk: false, joyX: 0, joyY: 0, jump: false, down: false, sprint: false, locked: false };
-let panelOpen = false;
-// полный сброс ввода: зажатые клавиши, стик, кнопки. Нужен при выходе в меню, входе в игру и потере фокуса —
-// иначе «залипший» стик или клавиша тянут динозавра в сторону сами по себе
-let resetTouch = () => {};
-function resetInput() {
-  keys.clear(); input.atk = input.jump = input.down = input.sprint = input.drag = false; input.joyX = input.joyY = 0;
-  resetTouch();
-}
-window.addEventListener('keydown', e => {
-  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
-  const k = e.code;
-  if (k === 'Tab') { e.preventDefault(); if (S && S.welcomed && !panelOpen) toggleMap(); return; }        // Tab — большая карта
-  if (k === 'Escape' && mapOpen) { toggleMap(false); return; }
-  if (k === 'KeyP' && S && S.welcomed && !e.repeat) { UI.openPlayers(); return; }
-  if (e.repeat) { if (['Space', 'ArrowUp', 'ArrowDown'].includes(k)) e.preventDefault(); return; }
-  keys.add(k);
-  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k)) e.preventDefault();
-  if (!S || !S.welcomed || panelOpen) return;
-  if (k === 'KeyE') act('e'); else if (k === 'KeyQ') act('q'); else if (k === 'KeyF') act('f');
-  else if (k === 'KeyV') UI.openEvo(); else if (k === 'KeyM') UI.openPause();
-  else if (k >= 'Digit1' && k <= 'Digit4') S.conn.send({ t: 'act', a: 'em', i: +k.slice(5) - 1 });
-});
-window.addEventListener('keyup', e => keys.delete(e.code));
-const skipHatch = () => { if (S && S.hatch && !S.hatch.done && clock - S.hatch.t0 > 1.5) S.hatch.skip = true; };
-window.addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'Escape' || e.code === 'Enter') skipHatch(); });
-window.addEventListener('pointerdown', skipHatch);
-window.addEventListener('blur', resetInput);
-document.addEventListener('visibilitychange', () => { if (document.hidden) resetInput(); });
-canvas.addEventListener('mousedown', e => {
-  Audio.init();
-  if (!S || !S.welcomed || panelOpen) return;
-  if (!IS_TOUCH && document.pointerLockElement !== canvas && e.button === 0) { try { canvas.requestPointerLock(); } catch (x) { /* ignore */ } }
-  if (e.button === 0) input.atk = true; if (e.button === 2) input.drag = true;
-});
-window.addEventListener('mouseup', e => { if (e.button === 0) input.atk = false; if (e.button === 2) input.drag = false; });
-canvas.addEventListener('contextmenu', e => e.preventDefault());
-window.addEventListener('mousemove', e => {
-  if (!S || !S.welcomed || panelOpen) return;
-  if (document.pointerLockElement === canvas || input.drag) { input.yaw -= e.movementX * 0.0032 * sens; input.pitch = clamp(input.pitch + e.movementY * 0.0030 * sens, -0.5, 1.25); }
-});
-canvas.addEventListener('wheel', e => { input.zoom = clamp(input.zoom * (e.deltaY > 0 ? 1.08 : 0.92), 0.55, 1.9); }, { passive: true });
-document.addEventListener('pointerlockchange', () => {
-  input.locked = document.pointerLockElement === canvas;
-  if (!input.locked && S && S.welcomed && !panelOpen && !mapOpen && !S.ending && !S.noPause) UI.openPause();
-});
-// сенсор: стик слева, свайп справа
-(function touchInit() {
-  const joy = $('joy'), knob = joy.querySelector('i'); let jid = null, cid = null, cx = 0, cy = 0;
-  joy.addEventListener('touchstart', e => { const t = e.changedTouches[0]; jid = t.identifier; const r = joy.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; mv(t); e.preventDefault(); Audio.init(); }, { passive: false });
-  function mv(t) { let dx = (t.clientX - cx) / 44, dy = (t.clientY - cy) / 44; const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; } input.joyX = dx; input.joyY = dy; knob.style.transform = `translate(${dx * 30}px,${dy * 30}px)`; }
-  window.addEventListener('touchmove', e => { for (const t of e.changedTouches) { if (t.identifier === jid) mv(t); else if (t.identifier === cid && S && !panelOpen) { input.yaw -= (t.clientX - cx2) * 0.0058 * sens; input.pitch = clamp(input.pitch + (t.clientY - cy2) * 0.0046 * sens, -0.5, 1.25); cx2 = t.clientX; cy2 = t.clientY; } } }, { passive: true });
-  let cx2 = 0, cy2 = 0;
-  const end = e => { for (const t of e.changedTouches) { if (t.identifier === jid) { jid = null; input.joyX = input.joyY = 0; knob.style.transform = ''; } if (t.identifier === cid) cid = null; } };
-  window.addEventListener('touchend', end); window.addEventListener('touchcancel', end);
-  canvas.addEventListener('touchstart', e => { Audio.init(); for (const t of e.changedTouches) if (cid === null && t.clientX > window.innerWidth * 0.3) { cid = t.identifier; cx2 = t.clientX; cy2 = t.clientY; } }, { passive: true });
-  const hold = (id, fn) => { const b = $(id); const on = e => { e.preventDefault(); b.classList.add('held'); fn(true); }; const off = e => { b.classList.remove('held'); fn(false); }; b.addEventListener('touchstart', on, { passive: false }); b.addEventListener('touchend', off); b.addEventListener('touchcancel', off); b.addEventListener('mousedown', on); b.addEventListener('mouseup', off); b.addEventListener('mouseleave', off); };
-  resetTouch = () => { jid = null; cid = null; knob.style.transform = ''; document.querySelectorAll('#hud .held').forEach(b => b.classList.remove('held')); };
-  hold('tb-jump', v => input.jump = v); hold('tb-sprint', v => input.sprint = v); hold('tb-atk', v => input.atk = v); hold('tb-down', v => input.down = v);
-})();
-function act(a) { if (S && S.conn && S.welcomed && S.alive) S.conn.send({ t: 'act', a }); }
-function readInput() {
-  let f = 0, s = 0;
-  if (!panelOpen) {
-    if (keys.has('KeyW') || keys.has('ArrowUp')) f += 1; if (keys.has('KeyS') || keys.has('ArrowDown')) f -= 1;
-    if (keys.has('KeyD') || keys.has('ArrowRight')) s += 1; if (keys.has('KeyA') || keys.has('ArrowLeft')) s -= 1;
-    f += -input.joyY; s += input.joyX;
-  }
-  const l = Math.hypot(f, s); if (l > 1) { f /= l; s /= l; }
-  const ok = !panelOpen;
-  return { f, s, yaw: input.yaw, pitch: input.pitch, jump: ok && (keys.has('Space') || input.jump), down: ok && (keys.has('KeyC') || keys.has('ControlLeft') || input.down), sprint: ok && (keys.has('ShiftLeft') || keys.has('ShiftRight') || input.sprint) };
+function onRoster(m) {
+  const prev = roster.size;
+  roster = new Map(m.list.map((r) => [r[0], { name: r[1], look: { c: r[2], p: r[3], h: r[4], e: r[5], t: r[6], s: r[7], k: r[10] | 0 }, bot: !!r[8], adm: !!r[9] }]));
+  hostId = m.host; cfg = { kind: m.cfg[0], len: m.cfg[1], mode: m.cfg[2], bots: m.cfg[3], chaos: m.cfg[4], diff: m.cfg[5] == null ? 1 : m.cfg[5], picks: m.cfg[6] || [] }; roomPub = !!m.pub;
+  if (roster.size > prev && prev > 0 && V && V.ph === 4) GA.play('join');
+  lobbySig = '';
 }
 
-// ---------------------------------------------------------------- состояние сессии
-let S = null;
-const prefersRu = () => window.I18N.lang === 'ru';
-function newSession(o) {
-  return {
-    o, conn: null, welcomed: false, ending: false, id: 0, room: null, world: null, W: null, biome: null, me: null, stats: null, profile: null, alive: true,
-    pending: [], seq: 0, lastRs: null, off: { x: 0, y: 0, z: 0 }, players: new Map(), ents: new Map(), actor: null, mp: null, bs: null, pt: null, du: null, rush: null, al: null,
-    drops: [], tod: 0.4, wx: 0, snapN: 0, lastSnapAt: 0, camShake: 0, speed: 0, lastPos: null, recent: [], effects: [], texts: [], zones: [], foodMeshes: [], lastAtk: 0,
-    ping: 0, tq: 0, noPause: false, sense: 0, ach: null, bossName: '', king: false, lord: false, fx: { rings: [], parts: [] }
-  };
-}
-const activeProfile = () => (S && S.o.online ? Profile.state.profile : Profile.state.local);
-
-function startSession(o) {
-  Audio.init(); resetInput();
-  if (S) endSession(true);
-  UI.closeAll(); UI.showLoading(true);
-  const prof = o.online ? Profile.state.profile : Profile.state.local;
-  if (!prof || !prof.hatched) { UI.showLoading(false); UI.toast(T('no_character')); UI.showMenu(); return; }
-  if (ctl.pendingHatch) o.hatch = true;
-  S = newSession(o);
-  const mine = S;
-  const h = {
-    onmsg: m => { if (S === mine) handleMsg(m); },
-    onclose: reason => { if (S !== mine || mine.ending) return; failSession(reason); },
-    onSave: p => { Profile.saveLocal(p); }
-  };
-  if (o.online) S.conn = connectOnline({ token: Profile.state.token, biome: o.biome, cls: o.cls, mode: o.mode, code: o.code }, h);
-  else S.conn = connectLocal({ profile: JSON.parse(JSON.stringify(prof)), biome: o.biome, cls: o.cls, mode: o.mode }, h);
-  // страховка: если за 10 секунд сервер не ответил — вернуться в меню
-  setTimeout(() => { if (S === mine && !mine.welcomed && !mine.ending) failSession('timeout'); }, 10000);
-}
-function failSession(reason) {
-  fade(false, 500);
-  const wasWelcomed = S && S.welcomed; const msg = reason === 'replaced' ? T('replaced') : wasWelcomed ? T('conn_lost') : (reason === 'error' || reason === 'timeout') ? T('server_off') : T(reason, null);
-  endSession(false); UI.toast(msg); UI.showMenu();
-}
-function endSession(silent) {
-  if (!S) return;
-  S.ending = true;
-  if (S.hatch && S.hatch.grp) { S.hatch.grp.parent && S.hatch.grp.parent.remove(S.hatch.grp); }
-  try { S.conn && S.conn.close(); } catch (e) { /* ignore */ }
-  if (S.world) S.world.dispose();
-  for (const p of S.players.values()) p.actor && p.actor.dispose();
-  S = null; scene = menu3d.scene; Audio.setScene('menu'); Audio.setCombat(false);
-  if (document.pointerLockElement) document.exitPointerLock();
-  $('hud').classList.remove('on'); $('respawn').classList.remove('on'); $('dreq').classList.remove('on'); $('bossbar').style.display = 'none'; $('duelbar').style.display = 'none'; $('tq').style.display = 'none';
-  panelOpen = false; resetInput();
-  if (!silent) { Profile.refreshProfile(); }
-  UI.showLoading(false);
-}
-
-// ---------------------------------------------------------------- сообщения сервера
-function handleMsg(m) {
-  switch (m.t) {
-    case 'welcome': onWelcome(m); break;
-    case 's': onSnapshot(m); break;
-    case 'join': if (S.welcomed) addPlayer(m.p); break;
-    case 'leave': removePlayer(m.id); break;
-    case 'upd': { const p = S.players.get(m.p.id); if (p && p.actor) { p.info = Object.assign(p.info, m.p); p.actor.set(m.p); if (m.p.king || m.p.lord) p.actor.set({ king: p.info.king, lord: p.info.lord }); } else if (m.p.id === S.id && S.actor) { S.actor.set(m.p); } break; }
-    case 'prof': onProfile(m.p); break;
-    case 'dead': S.deadBy = m.by; $('respawn').classList.add('on'); $('rs-s').textContent = m.by ? T('killed_by', { x: m.by }) : ''; break;
-    case 'duelreq': UI.duelRequest(m.from, m.nick); Audio.sfx('warn'); break;
-    case 'tq': S.tq = m.n | 0; updateTq(m); break;
-    case 'info': UI.toast(T(m.m)); if (m.m === 'duel_start') Audio.sfx('duelgo'); break;
-    case 'err': onErr(m); break;
-    case 'pong': S.ping = Math.round(performance.now() - m.n); break;
-    case 'rushend': UI.banner(T('rush_end', { n: m.wave }), 4000); break;
-  }
-}
-function onErr(m) {
-  const k = m.m;
-  if (!S.welcomed && k !== 'cooldown') { failSession(k === 'unauthorized' ? 'unauthorized' : k === 'full' ? 'room_full' : k === 'bad_code' ? 'bad_code' : k === 'locked' ? 'locked' : k === 'no_character' ? 'no_character' : k); return; }
-  if (k === 'replaced') { failSession('replaced'); return; }
-  const map = { cooldown: 'cooldown', need_fly: 'need_fly', no_tree: 'no_tree', duel_bad: 'duel_bad', duel_busy: 'duel_busy', coins: 'coins_err', evo_level: 'evo_level', evo_points: 'evo_points_err', evo_max: 'evo_max_err', evo_locked: 'evo_locked' };
-  if (k === 'boss_level') UI.toast(T('boss_level', { n: m.n })); else UI.toast(T(map[k] || k));
-}
-function updateTq(m) {
-  const el = $('tq'); if (!m.n) { el.style.display = 'none'; return; }
-  el.style.display = 'block'; el.firstElementChild.textContent = T('tourney_wait', { n: m.n }) + (m.code ? ' · ' + m.code : ''); $('tq-x').textContent = T('tourney_cancel');
-}
-$('tq-x').addEventListener('click', () => S && S.conn.send({ t: 'tourney_cancel' }));
-
-function buildWorldFor(biome) {
-  if (S.world) S.world.dispose();
-  scene = new THREE.Scene();
-  S.world = buildWorld(scene, biome); S.W = S.world.sim; S.biome = biome; S.world.applyQuality(qualityName);
-  S.texts.length = 0; S.fx = { rings: [], parts: [] }; initFx();   // эффекты и всплывающие цифры живут в сцене мира
-  Audio.setScene(biome);
-}
-function onWelcome(m) {
-  if (m.proto !== CONFIG.PROTO) { failSession('server_off'); return; }
-  const first = !S.welcomed; S.welcomed = true; S.id = m.id; S.room = m.room;
-  if (!S.world || S.biome !== m.room.biome) buildWorldFor(m.room.biome);
-  for (const p of S.players.values()) p.actor && p.actor.dispose();
-  for (const e of S.ents.values()) e.group && e.group.parent && e.group.parent.remove(e.group);
-  S.players.clear(); S.ents.clear(); S.pending.length = 0; S.lastRs = null; S.off = { x: 0, y: 0, z: 0 }; S.drops = []; S.zones.forEach(z => z.mesh.parent && z.mesh.parent.remove(z.mesh)); S.zones = [];
-  S.bs = null; S.du = null; S.rush = null; S.pt = null; S.al = null;
-  S.me = Sim.newPlayer(S.W, m.me.x, m.me.z); Sim.importState(S.me, m.me); S.lastPos = null;
-  onProfile(m.prof, true);
-  S.actor && S.actor.dispose();
-  const pr = S.profile;
-  S.actor = makeActor({ nick: pr.name, color: pr.color, cls: pr.cls, level: pr.level, evo: pr.evo, cosmetic: pr.cosmetic, admin: Profile.state.admin && S.o.online, king: pr.kings.indexOf(m.room.biome) >= 0, lord: Sim.isLord(pr) });
-  scene.add(S.actor.group);
-  for (const p of m.players) addPlayer(p);
-  S.tod = m.tod; input.yaw = S.me.face + Math.PI; input.pitch = 0.3; S.snapN = 0;
-  S.world.setPortalNext(false);
-  UI.showLoading(false); UI.closeAll(); $('hud').classList.add('on'); S.lastHud = 0; buildAbilityBar();
-  const inDuel = m.room.biome === 'duel';
-  $('hint').textContent = IS_TOUCH ? '' : T('hint_pc'); setTimeout(() => { if ($('hint')) $('hint').style.opacity = 0; }, 14000); $('hint').style.opacity = 0.8;
-  const hatchNow = first && S.o.hatch && !inDuel && S.world.nestInfo;
-  if (hatchNow) { ctl.pendingHatch = null; beginHatch(); setTimeout(() => fade(false, 1300), 350); }
-  else { if (S.o.hatch) { ctl.pendingHatch = null; } fade(false, 900); if (inDuel) { Audio.setScene('duel'); } else if (first) UI.banner(TN(CONFIG.BIOME[m.room.biome].n), 2600); }
-  Audio.sfx('portal');
-  if (S.o.online) S.pingT = setInterval(() => { if (S && S.conn) S.conn.send({ t: 'ping', n: performance.now() }); }, 4000);
-  $('respawn').classList.remove('on');
-}
-function onProfile(p, silent) {
-  const old = S.profile; S.profile = Sim.fixProfile(p);
-  if (S.o.online) Profile.setServerProfile(p); else Profile.saveLocal(S.profile);
-  S.stats = Sim.statsFor(S.profile.cls, S.profile.level, S.profile.evo);
-  S.sense = S.stats.sense || 0;
-  if (old && S.actor && old.cls === S.profile.cls && CONFIG.stageIndex(S.profile.level) > CONFIG.stageIndex(old.level) && !silent) {
-    const sn = T('stage_' + CONFIG.STAGES[CONFIG.stageIndex(S.profile.level)].id); UI.banner('🦖 ' + T('grew', { s: sn }), 3200); Audio.sfx('coin');
-  }
-  if (S.actor) S.actor.set({ level: S.profile.level, evo: S.profile.evo, cosmetic: S.profile.cosmetic || '', lord: Sim.isLord(S.profile), king: S.profile.kings.indexOf(S.biome) >= 0 });
-  // новые достижения
-  const done = {}; for (const a of CONFIG.ACH) done[a.id] = !!a.t(S.profile);
-  if (S.ach && !silent) for (const a of CONFIG.ACH) if (done[a.id] && !S.ach[a.id]) { UI.note('🏆 ' + TN(a.n)); Audio.sfx('coin'); }
-  S.ach = done;
-  if (old && S.profile.coins > old.coins) Audio.sfx('coin');
-  UI.refreshOpen && UI.refreshOpen();
-}
-function addPlayer(info) {
-  if (info.id === S.id || S.players.has(info.id)) return;
-  const actor = makeActor({ nick: info.nick, color: info.color, cls: info.cls, level: info.level, evo: info.evo, cosmetic: info.cosmetic, admin: info.admin, king: info.king, lord: info.lord, label: info.bot ? '' : '' });
-  scene.add(actor.group);
-  S.players.set(info.id, { info, actor, buf: [], hp: 100, flags: 0, shown: false, speed: 0 });
-}
-function removePlayer(id) { const p = S.players.get(id); if (p) { p.actor.dispose(); S.players.delete(id); } }
-
-// ---------------------------------------------------------------- снимки и предсказание
-function reconcile(m) {
-  const s = m.m, mp = m.mp, me = S.me;
-  if (S.lastRs !== mp.rs || !mp.alive) {          // телепорт, возрождение или мы мертвы: берём состояние сервера как есть
-    Sim.importState(me, s); S.pending.length = 0; S.lastRs = mp.rs; S.off.x = S.off.y = S.off.z = 0;
-    return;
-  }
-  const t = Sim.newPlayer(S.W, s.x, s.z); Sim.importState(t, s);
-  while (S.pending.length && S.pending[0].q <= m.a) S.pending.shift();
-  for (const inp of S.pending) Sim.step(t, inp, DT, S.W, S.stats);
-  const dx = t.x - me.x, dy = t.y - me.y, dz = t.z - me.z, d = Math.hypot(dx, dy, dz);
-  if (d > 4) { S.off.x = S.off.y = S.off.z = 0; }
-  else { S.off.x -= dx; S.off.y -= dy; S.off.z -= dz; }
-  Object.assign(me, t);
+function parseSnap(m) {
+  const map = new Map();
+  for (const a of m.p) map.set(a[0], { id: a[0], x: a[1], y: a[2], vx: a[3], vy: a[4], fl: a[5], cd: a[6] / 100, score: a[7], fall: a[8] / 100, a: a[9], b: a[10], face: a[11] / 100 });
+  m.map = map; return m;
 }
 function onSnapshot(m) {
-  const now = performance.now() / 1000;
-  S.snapN++; S.lastSnapAt = now; S.mp = m.mp; S.alive = !!m.mp.alive;
-  if (!S.alive && !$('respawn').classList.contains('on') && S.snapN > 2) $('respawn').classList.add('on');
-  if (S.alive && $('respawn').classList.contains('on')) $('respawn').classList.remove('on');
-  reconcile(m);
-  S.tod = m.tod; S.wx = m.wx;
-  for (const r of m.p) {
-    let p = S.players.get(r[0]);
-    if (!p) continue;            // информацию о новом игроке пришлёт 'join'
-    p.buf.push({ t: now, x: r[1], y: r[2], z: r[3], f: r[4] }); if (p.buf.length > 8) p.buf.shift();
-    p.hp = r[6]; p.flags = r[7]; p.speed = r[5];
+  m.at = performance.now(); parseSnap(m);
+  net.snaps.push(m); if (net.snaps.length > 30) net.snaps.shift();
+  lastMap = m.map;
+  handleEvents(m.e);
+  const s = m.map.get(myId);
+  if (s) {
+    const me = net.me, ph = physOf(m);
+    if (!me || m.ph === 0 || m.ph === 5 || !(s.fl & 1) || Math.hypot(me.x - s.x, me.y - s.y) > 260) net.me = { x: s.x, y: s.y, vx: s.vx, vy: s.vy, cdUntil: 0 };
+    net.me.srv = s; net.me.srvAt = m.at;
+    if (me && me.dashGrace) net.me.dashGrace = me.dashGrace;
+    net.me.cdUntil = performance.now() + s.cd * (ph.dashCD || 1) * 1000;
   }
-  const seen = new Set();
-  for (const r of m.e) { seen.add(r[0]); updateEnt(r, now); }
-  for (const [id, e] of S.ents) if (!seen.has(id) && now - e.seen > 0.7) { e.group.parent && e.group.parent.remove(e.group); S.ents.delete(id); }
-  if (m.f) { S.drops = m.f; S.dropsAt = now; syncFood(); }
-  S.bs = m.bs || null; if (m.pt) S.pt = m.pt; S.du = m.du || null; S.rush = m.rush || null; S.al = m.al || null;
-  if (S.world) { S.world.setPortalNext(S.pt && S.pt.next); S.world.barrier.visible = !!(S.bs && S.bs.st === 'fight'); }
-  Audio.setCombat(!!(S.bs && S.bs.st === 'fight') || !!(S.du && S.du.st === 'fight'));
-  if (m.mp.hz) S.hz = { k: m.mp.hz, t: now };
-  if (m.ev) for (const ev of m.ev) onEvent(ev, now);
 }
-function updateEnt(r, now) {
-  let e = S.ents.get(r[0]);
-  if (!e) {
-    const boss = typeof r[1] === 'string';
-    let g, arch = null, def = null, bossId = null;
-    if (boss) { bossId = r[1].slice(2); def = CONFIG.BOSSES[bossId]; g = buildBoss(bossId, def); }
-    else { arch = CONFIG.ENEMIES[ARCH_IDS[r[1]]]; g = buildEnemy(arch); g.scale.multiplyScalar((1 + Math.min(30, r[9]) * 0.012) * Sim.enemySizeMul(r[9])); }
-    const group = new THREE.Group(); group.add(g);
-    e = { id: r[0], boss, arch, def, bossId, group, model: g, buf: [], seen: now, lv: r[9], hp: r[6], mhp: r[7], flags: 0, tag: null, bar: null, tagKey: '', animT: Math.random() * 10, speed: 0, lastPos: null, shown: true };
-    const h = boss ? def.size * 3.6 : arch.size * (arch.model === 'quad' ? 2.4 : arch.model === 'ptero' ? 1.9 : arch.model === 'bug' ? 1.0 : arch.model === 'fish' ? 0.9 : arch.model === 'croc' ? 1.3 : 2.0) + 0.5;
-    e.tagY = h * (boss ? 1 : Sim.enemySizeMul(r[9]));
-    e.bar = makeHpBar(boss ? 3 : 1.3); e.bar.position.y = h + 0.1; e.bar.visible = false; group.add(e.bar);
-    scene.add(group); S.ents.set(r[0], e);
-  }
-  e.seen = now; e.hp = r[6]; e.mhp = r[7]; const prevF = e.flags; e.flags = r[8]; e.lv = r[9];
-  if ((r[8] & 1) && !(prevF & 1)) e.model.userData.bite = 1;
-  e.buf.push({ t: now, x: r[2], y: r[3], z: r[4], f: r[5] }); if (e.buf.length > 8) e.buf.shift();
-  e.phase = r[9];
-}
-// интерполяция буфера снимков на момент t
-function sample(buf, t, out) {
-  const n = buf.length; if (!n) return false;
-  if (n === 1 || t <= buf[0].t) { const b = buf[0]; out.x = b.x; out.y = b.y; out.z = b.z; out.f = b.f; return true; }
-  for (let i = n - 1; i > 0; i--) {
-    const a = buf[i - 1], b = buf[i];
-    if (t >= a.t) { const k = b.t > a.t ? clamp((t - a.t) / (b.t - a.t), 0, 1.25) : 1; out.x = a.x + (b.x - a.x) * k; out.y = a.y + (b.y - a.y) * k; out.z = a.z + (b.z - a.z) * k; out.f = lerpA(a.f, b.f, clamp(k, 0, 1)); return true; }
-  }
-  const b = buf[n - 1]; out.x = b.x; out.y = b.y; out.z = b.z; out.f = b.f; return true;
-}
+const physOf = (m) => (m.ph === 4 ? MODES[0].phys : MODES[m.md].phys);
 
-// ---------------------------------------------------------------- еда на земле
-const foodGeo = {}, foodMat = {};
-function foodMesh(k) {
-  const col = { plant: 0x6ccf4a, meat: 0xd9534f, smeat: 0xe88a6a, fish: 0x6ac8ff, bug: 0xffe066 }[k] || 0xffffff;
-  const g = new THREE.Group();
-  const m = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.25, roughness: 0.55 });
-  if (k === 'plant') {
-    // кустик папоротника: изогнутые перистые листья двух оттенков зелени
-    const gm = [0x3f8f3a, 0x5fb04a, 0x2f7a35].map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8, side: THREE.DoubleSide }));
-    for (let i = 0; i < 9; i++) {
-      const a = i / 9 * 6.283 + (i % 2) * 0.3, len = 0.75 + (i % 3) * 0.18, geo = new THREE.PlaneGeometry(0.34, len, 3, 6), pa = geo.attributes.position;
-      for (let v = 0; v < pa.count; v++) { const y = pa.getY(v) + len / 2, t = y / len, w = Math.sin(Math.min(1, t) * 3.0 + 0.2) * 0.9 + 0.1; pa.setX(v, pa.getX(v) * Math.max(0.12, w) * (1 - 0.5 * t * t)); pa.setY(v, y); pa.setZ(v, t * t * 0.45 * len); }
-      geo.computeVertexNormals(); const l = new THREE.Mesh(geo, gm[i % 3]); l.rotation.y = a; l.rotation.x = -0.35; l.position.set(Math.cos(a) * 0.05, 0.02, Math.sin(a) * 0.05); l.castShadow = false; g.add(l);
-    }
-    // выделение: светящееся кольцо на земле, мягкое сияние и искры над кустом — еду видно издалека на фоне травы
-    const ringM = new THREE.MeshBasicMaterial({ color: 0xd8ff5a, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
-    const rg = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.78, 40), ringM); rg.rotation.x = -Math.PI / 2; rg.position.y = 0.06; g.add(rg);
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDot(), color: 0xc8ff4a, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-    glow.position.y = 0.55; glow.scale.set(2.4, 2.4, 1); g.add(glow);
-    const spark = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDot(), color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-    spark.position.y = 1.5; spark.scale.set(0.45, 0.45, 1); g.add(spark);
-    g.scale.setScalar(1.35); g.userData.fx = { rg, glow, spark };
-    return g;
-  }
-  else if (k === 'fish') { const b = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 12), m); b.scale.set(0.5, 0.6, 1.2); b.position.y = 0.35; g.add(b); const t = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.3, 4), m); t.rotation.x = -Math.PI / 2; t.position.set(0, 0.35, -0.4); g.add(t); }
-  else if (k === 'bug') { const b = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 10), m); b.position.y = 0.5; g.add(b); }
-  else {
-    // мясо: жареная ножка — сочный бугристый «барабан», суживающийся к кости, на конце кости две шишечки; лежит на земле наискосок
-    const small = k === 'smeat', sc0 = small ? 0.85 : 1.35;
-    const prof = [[0.001, 0], [0.12, 0.015], [0.27, 0.1], [0.38, 0.28], [0.42, 0.5], [0.37, 0.72], [0.26, 0.92], [0.14, 1.07], [0.075, 1.18], [0.001, 1.22]].map(([r, y]) => new THREE.Vector2(r, y));
-    const mg = new THREE.LatheGeometry(prof, 28), pa = mg.attributes.position, cols = new Float32Array(pa.count * 3), tc = new THREE.Color(), cLo = new THREE.Color(small ? 0xd0743a : 0xb8531f), cHi = new THREE.Color(small ? 0xf0a060 : 0xe58a3e), cDk = new THREE.Color(0x6a2a10);
-    for (let v = 0; v < pa.count; v++) {
-      let x = pa.getX(v), y = pa.getY(v), z = pa.getZ(v); const n = Math.sin(x * 11 + y * 7) * Math.cos(z * 9 + y * 5) * 0.5 + Math.sin(y * 17 + z * 6) * 0.25, d = 1 + n * 0.09;
-      pa.setXYZ(v, x * d, y, z * d);
-      tc.copy(cLo).lerp(cHi, Math.max(0, Math.min(1, 0.5 + n * 1.2 + (z > 0 ? 0.25 : -0.1)))).lerp(cDk, Math.max(0, -n * 0.8));
-      cols[v * 3] = tc.r; cols[v * 3 + 1] = tc.g; cols[v * 3 + 2] = tc.b;
-    }
-    mg.setAttribute('color', new THREE.BufferAttribute(cols, 3)); mg.computeVertexNormals();
-    const meat = new THREE.Mesh(mg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, emissive: 0x401400, emissiveIntensity: 0.35 }));
-    const boneM = new THREE.MeshStandardMaterial({ color: 0xf6f0dc, roughness: 0.5 });
-    const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.075, 0.5, 10), boneM); bone.position.y = 1.4;
-    const kn1 = new THREE.Mesh(new THREE.SphereGeometry(0.115, 12, 10), boneM), kn2 = kn1.clone(); kn1.position.set(0.07, 1.68, 0); kn2.position.set(-0.07, 1.66, 0.03);
-    const leg = new THREE.Group(); leg.add(meat, bone, kn1, kn2); leg.rotation.z = -1.15; leg.rotation.y = 0.5; leg.position.set(0.42 * sc0, 0.3 * sc0, 0); leg.scale.setScalar(sc0 * 0.62); g.add(leg);
-    const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDot(), color: 0xff5a4a, transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); gl.position.y = 0.5; gl.scale.set(2.0, 2.0, 1); g.add(gl);
-    g.userData.fx = { glow: gl };
-  }
-  return g;
-}
-function syncFood() {
-  const list = S.drops; S.foodMeshes = S.foodMeshes || [];
-  while (S.foodMeshes.length > list.length) { const f = S.foodMeshes.pop(); f.parent && f.parent.remove(f); }
-  for (let i = 0; i < list.length; i++) {
-    const d = list[i]; let f = S.foodMeshes[i];
-    if (!f || f.userData.k !== d[3]) { if (f) f.parent.remove(f); f = foodMesh(d[3]); f.userData.k = d[3]; scene.add(f); S.foodMeshes[i] = f; }
-    f.position.set(d[0], d[1] > S.W.waterY - 0.6 && S.world && S.world.meshH ? Math.max(d[1], S.world.meshH(d[0], d[2]) + 0.03) : d[1], d[2]);
+function sendIn(force, dash) {
+  const ws = net.ws; if (!ws || ws.readyState !== 1) return;
+  const now = performance.now();
+  const iv = getInputVec();
+  const x = Math.round(iv.x * 100) / 100, y = Math.round(iv.y * 100) / 100;
+  const key = x + ',' + y;
+  if (dash || (key !== net.lastIn && now - net.lastSent > 45) || now - net.lastSent > 250 || force) {
+    ws.send(JSON.stringify({ t: 'in', x, y, d: dash ? 1 : 0 }));
+    net.lastIn = key; net.lastSent = now;
   }
 }
+const wsSend = (o) => { if (net.ws && net.ws.readyState === 1) net.ws.send(JSON.stringify(o)); };
 
-// ---------------------------------------------------------------- эффекты
-const NP = 360;
-let _sd = null;
-function softDot() {
-  if (_sd) return _sd; const c = document.createElement('canvas'); c.width = c.height = 32; const g = c.getContext('2d');
-  const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = gr; g.fillRect(0, 0, 32, 32); return (_sd = new THREE.CanvasTexture(c));
-}
-function initFx() {
-  const g = new THREE.BufferGeometry(), pos = new Float32Array(NP * 3), col = new Float32Array(NP * 3);
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const pts = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.6, vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending, map: softDot() }));
-  pts.frustumCulled = false; scene.add(pts);
-  S.fx.pts = pts; S.fx.pos = pos; S.fx.col = col; S.fx.vel = new Float32Array(NP * 3); S.fx.life = new Float32Array(NP); S.fx.next = 0;
-}
-function burst(x, y, z, hex, n, spd, up) {
-  if (!S.fx.pts) return; const c = new THREE.Color(hex), F_ = S.fx; spd = spd || 4;
-  for (let i = 0; i < n; i++) {
-    const k = F_.next; F_.next = (F_.next + 1) % NP;
-    F_.pos[k * 3] = x; F_.pos[k * 3 + 1] = y; F_.pos[k * 3 + 2] = z;
-    const a = Math.random() * TWO_PI, v = (0.3 + Math.random()) * spd;
-    F_.vel[k * 3] = Math.cos(a) * v; F_.vel[k * 3 + 1] = (up === undefined ? 2 : up) + Math.random() * spd * 0.6; F_.vel[k * 3 + 2] = Math.sin(a) * v;
-    F_.col[k * 3] = c.r; F_.col[k * 3 + 1] = c.g; F_.col[k * 3 + 2] = c.b; F_.life[k] = 0.5 + Math.random() * 0.6;
-  }
-}
-function updateFx(dt) {
-  const F_ = S.fx; if (F_.pts) {
-  for (let i = 0; i < NP; i++) {
-    if (F_.life[i] <= 0) { F_.pos[i * 3 + 1] = -999; continue; }
-    F_.life[i] -= dt; F_.vel[i * 3 + 1] -= 9 * dt;
-    F_.pos[i * 3] += F_.vel[i * 3] * dt; F_.pos[i * 3 + 1] += F_.vel[i * 3 + 1] * dt; F_.pos[i * 3 + 2] += F_.vel[i * 3 + 2] * dt;
-  }
-  F_.pts.geometry.attributes.position.needsUpdate = true; F_.pts.geometry.attributes.color.needsUpdate = true;
-  }
-  for (let i = F_.rings.length - 1; i >= 0; i--) {
-    const r = F_.rings[i]; r.t += dt; const k = r.t / r.dur;
-    if (k >= 1) { scene.remove(r.mesh); r.mesh.geometry.dispose(); r.mesh.material.dispose(); F_.rings.splice(i, 1); continue; }
-    r.mesh.scale.setScalar(Math.max(0.01, r.r * (0.15 + 0.85 * Math.sqrt(k)))); r.mesh.material.opacity = 0.7 * (1 - k);
-  }
-  for (let i = S.texts.length - 1; i >= 0; i--) {
-    const t = S.texts[i]; t.t += dt; const k = t.t / t.dur;
-    if (k >= 1) { scene.remove(t.sp); t.sp.material.dispose(); S.texts.splice(i, 1); continue; }
-    t.sp.position.y = t.y0 + k * 2.2; t.sp.material.opacity = k < 0.6 ? 1 : (1 - k) / 0.4;
-  }
-  const now = performance.now() / 1000;
-  for (let i = S.zones.length - 1; i >= 0; i--) {
-    const z = S.zones[i], k = (now - z.t0) / z.warn;
-    if (k >= 1.12) { scene.remove(z.mesh); z.mesh.traverse(o => { o.geometry && o.geometry.dispose(); o.material && o.material.dispose(); }); S.zones.splice(i, 1); continue; }
-    z.fill.scale.set(z.shape === 2 ? 1 : Math.min(1, k), Math.min(1, k), 1); if (z.shape === 2) z.fill.scale.set(1, Math.min(1, k), 1);
-    z.fill.material.opacity = k < 1 ? 0.28 + 0.2 * Math.sin(now * 14) * (k > 0.7 ? 1 : 0) : 0.75 * (1.12 - k) / 0.12;
-  }
-}
-const ringGeo = new THREE.RingGeometry(0.88, 1, 40);
-function ring(x, y, z, hex, r, dur) {
-  const m = new THREE.Mesh(ringGeo.clone(), new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
-  m.rotation.x = -Math.PI / 2; m.position.set(x, y + 0.25, z); m.scale.setScalar(0.1); scene.add(m); S.fx.rings.push({ mesh: m, t: 0, dur: dur || 0.6, r });
-}
-const textCache = new Map();
-function floatText(x, y, z, text, color, size) {
-  if (S.texts.length > 40) return;
-  const key = text + color; let tex = textCache.get(key);
-  if (!tex) {
-    const c = document.createElement('canvas'); c.width = 160; c.height = 80; const g = c.getContext('2d'); g.font = 'bold 44px system-ui,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.lineWidth = 8; g.strokeStyle = 'rgba(0,0,0,.8)'; g.strokeText(text, 80, 40); g.fillStyle = color; g.fillText(text, 80, 40);
-    tex = new THREE.CanvasTexture(c); if (textCache.size > 200) textCache.clear(); textCache.set(key, tex);
-  }
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })); sp.renderOrder = 20;
-  const s = size || 1; sp.scale.set(2.0 * s, 1.0 * s, 1); sp.position.set(x, y, z); scene.add(sp); S.texts.push({ sp, t: 0, dur: 1.0, y0: y });
-}
-function spawnTelegraph(shape, x, z, ang, a, b, warn, hz) {
-  const col = hz ? 0xffa030 : 0xff3a2a, y = S.W.heightAt(x, z) + 0.35;
-  const mk = (op) => new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op, side: THREE.DoubleSide, depthWrite: false, depthTest: false });
-  let g1, g2;
-  if (shape === 0) { g1 = new THREE.CircleGeometry(a, 40); g2 = g1.clone(); }
-  else if (shape === 3) { g1 = new THREE.RingGeometry(a * 0.4, a, 48); g2 = g1.clone(); }
-  else if (shape === 1) { g1 = new THREE.CircleGeometry(a, 32, Math.PI / 2 - b / 2, b); g2 = g1.clone(); }
-  else { g1 = new THREE.PlaneGeometry(b, a); g1.translate(0, a / 2, 0); g2 = g1.clone(); }
-  const outline = new THREE.Mesh(g1, mk(0.16)), fill = new THREE.Mesh(g2, mk(0.3));
-  fill.renderOrder = 6; outline.renderOrder = 5;
-  const grp_ = new THREE.Group(); grp_.add(outline, fill); grp_.rotation.x = Math.PI / 2;
-  const holder = new THREE.Group(); holder.position.set(x, y, z); holder.rotation.y = shape === 0 || shape === 3 ? 0 : ang; holder.add(grp_);
-  scene.add(holder); S.zones.push({ mesh: holder, fill, t0: performance.now() / 1000, warn: Math.max(0.2, warn), shape });
-  Audio.sfx('warn');
-}
-function posOf(id) {
-  if (id === S.id) { const a = S.actor; return a ? a.group.position : null; }
-  const p = S.players.get(id); if (p) return p.actor.group.position;
-  const e = S.ents.get(id); return e ? e.group.position : null;
-}
-const EMOJI = ['👋', '😄', '😡', '❤'];
-function onEvent(ev, now) {
-  const k = ev[0]; let p;
-  switch (k) {
-    case 'h': {
-      p = posOf(ev[1]); if (!p) break; const me = ev[1] === S.id;
-      if (ev[3] === 3) { floatText(p.x, p.y + 2.4, p.z, T('dodge'), '#9be37a', 1); break; }
-      if (ev[3] === 4) { const te = S.ents.get(ev[1]); if (te && now - (te.tsAt || 0) > 1.2) { te.tsAt = now; floatText(p.x, p.y + 2.6, p.z, T('too_strong'), '#ffb43a', 1.1); Audio.sfx('hit'); } break; }   // слишком сильный враг      // уворот
-      const col = me ? '#ff6a5a' : ev[3] === 1 ? '#ffb43a' : ev[3] === 2 ? '#7ad8ff' : '#ffffff';
-      floatText(p.x, p.y + 2.2, p.z, (me ? '-' : '') + ev[2], col, ev[3] ? 1.3 : 1);
-      burst(p.x, p.y + 1.1, p.z, me ? 0xff3a2a : 0xffe08a, me ? 8 : 6, 3.5); Audio.sfx(me ? 'hurt' : 'hit');
-      if (me) S.camShake = Math.max(S.camShake, 0.25);
-      else { const te = S.ents.get(ev[1]); if (te) { te.olUntil = now + 0.7; te.olOn = true; setOutline(te.model, true, 0xff2418); } }   // красный контур укушенного врага
-      const pl = S.players.get(ev[1]); if (pl) pl.hurt = now;
-      break;
-    }
-    case 'k': { const e = S.ents.get(ev[1]); if (e) { burst(e.group.position.x, e.group.position.y + 1, e.group.position.z, 0xffd35a, 18, 5); e.group.parent && e.group.parent.remove(e.group); S.ents.delete(ev[1]); } break; }
-    case 'd': p = posOf(ev[1]); if (p) burst(p.x, p.y + 1, p.z, 0xcc3322, 22, 5); if (ev[1] === S.id) { Audio.sfx('die'); S.camShake = 0.6; } break;
-    case 'lv': p = posOf(ev[1]); if (p) { ring(p.x, p.y, p.z, 0xffe066, 4, 0.9); burst(p.x, p.y + 1, p.z, 0xffe066, 24, 5); } if (ev[1] === S.id) { Audio.sfx('level'); UI.banner(T('lv_up', { n: ev[2] }), 2200); } break;
-    case 'xp': if (ev[1] === S.id) { p = posOf(ev[1]); if (p) floatText(p.x, p.y + 3.0, p.z, '+' + ev[2] + ' XP', '#9be37a', 0.8); } break;
-    case 'eat': p = posOf(ev[1]); if (p) burst(p.x, p.y + 1.4, p.z, ev[2] === 'plant' ? 0x6ccf4a : 0xd9534f, 8, 2.5); if (ev[1] === S.id) Audio.sfx('eat'); break;
-    case 'b': { const pl = ev[1] === S.id ? S.actor : (S.players.get(ev[1]) || {}).actor; if (pl) pl.dino.userData.bite = 1; if (ev[1] === S.id) Audio.sfx('swing'); break; }
-    case 'evo': p = posOf(ev[1]); if (p) { ring(p.x, p.y, p.z, 0x7af0ff, 5, 1.0); burst(p.x, p.y + 1, p.z, 0x7af0ff, 30, 6); } if (ev[1] === S.id) { Audio.sfx('evo'); UI.banner(T('evo_done'), 1600); } break;
-    case 'dash': p = posOf(ev[1]); if (p) burst(p.x, p.y + 0.5, p.z, 0xffffff, 10, 3, 0.5); Audio.sfx('dash'); break;
-    case 'dive': p = posOf(ev[1]); if (p) { ring(p.x, p.y, p.z, 0xffffff, 3, 0.4); burst(p.x, p.y, p.z, 0xdddddd, 14, 4); } Audio.sfx('boom'); break;
-    case 'roar': p = posOf(ev[1]); if (p) ring(p.x, p.y, p.z, 0xff7a4a, ev[2] || 14, 0.8); Audio.sfx('roar'); if (ev[1] !== S.id) S.camShake = Math.max(S.camShake, 0.1); break;
-    case 'screech': p = posOf(ev[1]); if (p) ring(p.x, p.y, p.z, 0xffe14a, ev[2] || 10, 0.7); Audio.sfx('screech'); break;
-    case 'herd': p = posOf(ev[1]); if (p) { ring(p.x, p.y, p.z, 0xc9a86a, ev[2] || 9, 0.6); burst(p.x, p.y + 0.3, p.z, 0xb59a6a, 26, 5); if (ev[1] === S.id) S.camShake = Math.max(S.camShake || 0, 0.35); } Audio.sfx('hit'); break;
-    case 'grd': p = posOf(ev[1]); if (p) burst(p.x, p.y + 1.0, p.z, 0x9ad8ff, 10, 2.5); break;   // щит: светящийся пузырь вокруг динозавра (без плоского «круга-таблички»)
-    case 'fly': p = posOf(ev[1]); if (p) burst(p.x, p.y + 0.3, p.z, 0xdddddd, 12, 3); break;
-    case 'arc': { const a = posOf(ev[1]), b = posOf(ev[2]); if (a && b) { for (let i = 0; i < 8; i++) { const t = i / 7; burst(a.x + (b.x - a.x) * t, a.y + 1 + (b.y - a.y) * t, a.z + (b.z - a.z) * t, 0x7ad8ff, 2, 1, 0); } Audio.sfx('shock'); } break; }
-    case 'em': p = posOf(ev[1]); if (p) { floatText(p.x, p.y + 3.6, p.z, EMOJI[ev[2]] || '?', '#ffffff', 1.4); Audio.sfx('emote'); } break;
-    case 'tel': spawnTelegraph(ev[1], ev[2], ev[3], ev[4], ev[5], ev[6], ev[7], ev[8]); break;
-    case 'shake': S.camShake = Math.max(S.camShake, ev[1] * 0.7); Audio.sfx('boom'); break;
-    case 'boss': {
-      if (ev[2] === 'start') { UI.banner(T('boss_start'), 2200); Audio.sfx('boss'); }
-      else if (ev[2] === 'dead') { UI.banner(T('boss_dead'), 3200); Audio.sfx('king'); const e = S.ents.get(ev[1]); if (e) for (let i = 0; i < 4; i++) burst(e.group.position.x, e.group.position.y + 2 + i, e.group.position.z, 0xffb04a, 30, 8); }
-      break;
-    }
-    case 'bossph': UI.banner(T('boss_phase', { n: ev[2] + 1 }), 1800); Audio.sfx('boss'); break;
-    case 'summon': Audio.sfx('roar'); break;
-    case 'burrow': { const e = S.ents.get(ev[1]); if (e) { e.burrowed = !!ev[2]; burst(e.group.position.x, e.group.position.y, e.group.position.z, 0xc9a25a, 24, 6); } Audio.sfx('boom'); break; }
-    case 'king': {
-      p = posOf(ev[1]); if (p) { ring(p.x, p.y, p.z, 0xffd35a, 8, 1.4); burst(p.x, p.y + 2, p.z, 0xffd35a, 40, 8); }
-      if (ev[1] === S.id) { UI.banner(ev[4] ? T('lord_new') : T('king_new', { b: TN(CONFIG.BIOME[ev[2]].n) }), 4200); Audio.sfx('king'); }
-      break;
-    }
-    case 'port': Audio.sfx('portal'); break;
-    case 'rush': UI.banner(T('rush_wave', { n: ev[1] }), 2200); Audio.sfx('boss'); break;
-    case 'rushwave': UI.banner(T('rush_clear', { c: ev[2] }), 2200); Audio.sfx('win'); break;
-    case 'duelgo': UI.banner(T('duel_go'), 1200); Audio.sfx('duelgo'); break;
-    case 'duelend': break;
-    case 'duelwin': { const win = ev[1] === S.id; UI.banner(win ? T('duel_win') : T('duel_lose'), 3000); Audio.sfx(win ? 'win' : 'lose'); break; }
-    case 'champ': UI.banner(T('champ', { x: ev[1] === S.id ? S.profile.name : ((S.players.get(ev[1]) || {}).info || {}).nick || '?' }), 4000); Audio.sfx('king'); break;
-    case 'warn': Audio.sfx('warn'); break;
-    case 'shot': { const e = S.ents.get(ev[1]); if (e) { const a = e.group.position; for (let i = 0; i < 10; i++) { const t = i / 9; burst(a.x + (ev[2] - a.x) * t, a.y + 1.2 + (ev[3] - a.y) * t, a.z + (ev[4] - a.z) * t, 0x9aff4a, 1, 0.5, 0); } Audio.sfx('swing'); } break; }
-  }
-}
+/* ================= ввод ================= */
+const keys = new Set();
+const joy = { id: -1, active: false, bx: 0, by: 0, x: 0, y: 0, kx: 0, ky: 0 };
+let dashQueued = false;
+const cv = $('c'); const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
 
-// ---------------------------------------------------------------- способности и панель
-const ABIL = {
-  atk: { ico: '🦷', n: { ru: 'Атака', en: 'Attack' } }, pounce: { ico: '⚡', n: { ru: 'Рывок', en: 'Pounce' } }, roar: { ico: '📣', n: { ru: 'Рёв', en: 'Roar' } },
-  guard: { ico: '🛡', n: { ru: 'Щит', en: 'Guard' } }, herd: { ico: '🦶', n: { ru: 'Топот', en: 'Stomp' } }, screech: { ico: '📢', n: { ru: 'Крик', en: 'Screech' } },
-  dive: { ico: '🦅', n: { ru: 'Пике', en: 'Dive' } }, sonic: { ico: '🔊', n: { ru: 'Звук', en: 'Sonic' } }, torpedo: { ico: '🚀', n: { ru: 'Торпеда', en: 'Torpedo' } },
-  climb: { ico: '🌲', n: { ru: 'Лазание', en: 'Climb' } }, fly: { ico: '🪽', n: { ru: 'Взлёт', en: 'Fly' } }
-};
-function buildAbilityBar() {
-  $('tb-sprint').style.display = CONFIG.CLASSES[S.profile.cls].noSprint ? 'none' : '';
-  const cls = S.profile.cls, A = CONFIG.ABILITIES[cls], bar = $('abil'); bar.innerHTML = '';
-  const defs = [['atk', 'atk', 'LMB', null], ['e', A.e.id, 'E', A.e.cd], ['q', A.q.id, 'Q', A.q.cd]];
-  if (cls === 'herb') defs.push(['f', 'climb', 'F', 0]); if (cls === 'fly') defs.push(['f', 'fly', 'F', 0]);
-  S.abBtns = [];
-  for (const [slot, id, key, cd] of defs) {
-    const b = document.createElement('button'); b.className = 'ab'; b.innerHTML = `<small>${key === 'LMB' ? (IS_TOUCH ? '' : '🖱') : key}</small><span>${(id === 'atk' ? CONFIG.CLS_INFO[cls].atkIco : ABIL[id].ico)}</span><div class="cd"></div><div class="nm">${TN(ABIL[id].n)}</div>`;
-    const down = e => { e.preventDefault(); Audio.init(); if (slot === 'atk') { input.atk = true; b.classList.add('held'); } else act(slot); };
-    const up = () => { if (slot === 'atk') { input.atk = false; b.classList.remove('held'); } };
-    b.addEventListener('touchstart', down, { passive: false }); b.addEventListener('touchend', up); b.addEventListener('mousedown', down); b.addEventListener('mouseup', up); b.addEventListener('mouseleave', up);
-    bar.appendChild(b); S.abBtns.push({ slot, b, cd, el: b.querySelector('.cd') });
-  }
+function getInputVec() {
+  let x = 0, y = 0;
+  if (keys.has('ArrowLeft') || keys.has('KeyA')) x -= 1;
+  if (keys.has('ArrowRight') || keys.has('KeyD')) x += 1;
+  if (keys.has('ArrowUp') || keys.has('KeyW')) y -= 1;
+  if (keys.has('ArrowDown') || keys.has('KeyS')) y += 1;
+  if (x || y) { const m = Math.hypot(x, y); return { x: x / m, y: y / m }; }
+  if (joy.active) return { x: joy.x, y: joy.y };
+  return { x: 0, y: 0 };
 }
+window.addEventListener('keydown', (e) => {
+  if (mode === 'menu') return;
+  if (e.target && e.target.tagName === 'INPUT') return;
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+  if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') { if (!e.repeat) doDash(); }
+  else if (/^Digit[1-8]$/.test(e.code)) sendEmote(+e.code.slice(5) - 1);
+  else keys.add(e.code);
+});
+window.addEventListener('keyup', (e) => keys.delete(e.code));
+window.addEventListener('blur', () => keys.clear());
+window.addEventListener('contextmenu', (e) => e.preventDefault());
 
-// ---------------------------------------------------------------- вылупление: яйцо в гнезде, трещины, скорлупа, детёныш
-function fade(on, ms) {
-  const el = $('fade'); if (!el) return Promise.resolve();
-  ms = ms || 700; el.style.transitionDuration = ms + 'ms';
-  el.classList.toggle('on', !!on);
-  return new Promise(r => setTimeout(r, ms + 40));
-}
-function splitEggGeos(L, Wd, asym, yb, seed) {
-  const R = DinoNest.eggProfile(L, Wd, asym), seg = 56, rows = 24, n3 = DinoNest.noise3;
-  // линия разлома — зубчатая, как настоящая трещина
-  const jag = a => yb + L * (0.03 * (Math.abs(((a * 9 / 6.2832) % 1) - 0.5) * 4 - 1) + 0.012 * Math.sin(a * 23 + seed) + 0.02 * n3(Math.cos(a) * 2, Math.sin(a) * 2, 0.5, seed));
-  const part = (lo) => {
-    const pos = [], uv = [], idx = [];
-    for (let i = 0; i <= rows; i++) {
-      const t = i / rows, k = 0.5 - 0.5 * Math.cos(Math.PI * t);
-      for (let j = 0; j <= seg; j++) {
-        const a = j / seg * 6.2832, ye = jag(a), y = lo ? ye * k : ye + (L - ye) * k, r = R(Math.min(L, Math.max(0, y)));
-        pos.push(Math.cos(a) * r, y, Math.sin(a) * r); uv.push(j / seg, y / L);
+cv.addEventListener('pointerdown', (e) => {
+  if (mode === 'menu') return;
+  GA.init();
+  if (joy.id !== -1) return;
+  joy.id = e.pointerId; joy.active = true; joy.bx = e.clientX; joy.by = e.clientY; joy.x = joy.y = 0; joy.kx = e.clientX; joy.ky = e.clientY;
+  try { cv.setPointerCapture(e.pointerId); } catch (er) {}
+});
+cv.addEventListener('pointermove', (e) => {
+  if (e.pointerId !== joy.id) return;
+  const R = 56; let dx = e.clientX - joy.bx, dy = e.clientY - joy.by; const m = Math.hypot(dx, dy);
+  if (m > R) { joy.bx += (dx / m) * (m - R); joy.by += (dy / m) * (m - R); dx = (dx / m) * R; dy = (dy / m) * R; }
+  joy.x = dx / R; joy.y = dy / R; joy.kx = joy.bx + dx; joy.ky = joy.by + dy;
+});
+const endJoy = (e) => { if (e.pointerId === joy.id) { joy.id = -1; joy.active = false; joy.x = joy.y = 0; } };
+cv.addEventListener('pointerup', endJoy); cv.addEventListener('pointercancel', endJoy);
+
+function doDash() {
+  if (mode === 'menu') return;
+  GA.init();
+  if (mode === 'online') {
+    const me = net.me, last = net.snaps[net.snaps.length - 1];
+    if (me && last && (last.ph === 1 || last.ph === 4)) {
+      const M = last.ph === 4 ? MODES[0] : MODES[last.md], ph = M.phys;
+      if (ph.dashV > 0 && !M.onDash && performance.now() >= me.cdUntil) {
+        const iv = getInputVec(); let dx = iv.x, dy = iv.y; const m = Math.hypot(dx, dy);
+        if (m < 0.2) { const sp = Math.hypot(me.vx, me.vy); if (sp > 30) { dx = me.vx / sp; dy = me.vy / sp; } else { const a = (anim.get(myId) || { face: 0 }).face; dx = Math.cos(a); dy = Math.sin(a); } }
+        me.vx += dx * ph.dashV; me.vy += dy * ph.dashV; me.cdUntil = performance.now() + ph.dashCD * 1000; me.dashGrace = performance.now() + (net.ping || 100) + 120;
       }
     }
-    const cols = seg + 1;
-    for (let i = 0; i < rows; i++) for (let j = 0; j < seg; j++) { const a = i * cols + j, b = a + 1, c = a + cols, d = c + 1; idx.push(a, c, b, b, c, d); }
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g;
-  };
-  return { lo: part(true), hi: part(false), jag };
+    sendIn(true, true);
+  } else dashQueued = true;
 }
-function beginHatch() {
-  const ni = S.world.nestInfo, me = S.me, r = DinoNest.rngOf(((me.x * 13) | 0) + 77);
-  const floorY = ni ? ni.y : me.y;
-  const L = 1.15, Wd = 0.74, yb = L * 0.64, seed = (r() * 999) | 0;
-  const tex = DinoNest.shellTexture(ni ? ni.shell : 'sand', seed, false), pores = DinoNest.poreTexture(seed + 3);
-  const mat = new THREE.MeshStandardMaterial({ map: tex, bumpMap: pores, bumpScale: 0.004, roughness: 0.55, side: THREE.DoubleSide });
-  const G = splitEggGeos(L, Wd, 0.08, yb, seed);
-  const grp = new THREE.Group(); grp.position.set(me.x, floorY - 0.06, me.z); scene.add(grp);
-  const lo = new THREE.Mesh(G.lo, mat); lo.castShadow = lo.receiveShadow = true;
-  const cy = (yb + L) / 2; G.hi.translate(0, -cy, 0);
-  const hi = new THREE.Mesh(G.hi, mat); hi.position.y = cy; hi.castShadow = hi.receiveShadow = true;
-  const rock = new THREE.Group(); rock.add(lo); rock.add(hi); grp.add(rock);
-  // трещины рисуются по текстуре постепенно: главная — ровно по линии разлома, от неё ветки
-  const cv = tex.image, g2 = cv.getContext('2d'), W = cv.width, H = cv.height, segs = [];
-  const toPx = (a, y) => [a / 6.2832 * W, H * (1 - y / L)];
-  const starts = [r() * 6.28, r() * 6.28, r() * 6.28];
-  starts.forEach((a0, si) => {
-    for (const dir of [1, -1]) { let a = a0, prev = toPx(a, G.jag(a)); for (let k = 0; k < 40; k++) { a += dir * 0.06; const p = toPx(((a % 6.2832) + 6.2832) % 6.2832, G.jag(((a % 6.2832) + 6.2832) % 6.2832)); if (Math.abs(p[0] - prev[0]) < W / 2) segs.push({ a: prev, b: p, w: 2.4, o: si * 0.12 + k / 40 }); prev = p; } }
-  });
-  for (let k = 0; k < 16; k++) {   // ветвящиеся трещинки вверх и вниз от линии
-    const a = r() * 6.2832; let p = toPx(a, G.jag(a)), ang = (r() < 0.5 ? -1 : 1) * (1.2 + r() * 0.7), o = 0.3 + r() * 0.6;
-    for (let q = 0; q < 6; q++) { ang += r() * 0.8 - 0.4; const np = [p[0] + Math.cos(ang) * 7, p[1] + Math.sin(ang) * 7]; segs.push({ a: p, b: np, w: 1.4, o: o + q * 0.02 }); p = np; }
-  }
-  segs.sort((x, y) => x.o - y.o);
-  S.hatch = { t0: clock, grp, rock, lo, hi, mat, tex, g2, segs, drawn: 0, floorY, L, yb, chips: [], burst: false, tip: 0, capV: null, done: false, blend: 0, camA: me.face || 0, knocks: [2.0, 2.9, 3.5, 3.9], skip: false };
-  $('hud').classList.remove('on'); input.yaw = (me.face || 0) + Math.PI; input.pitch = 0.32;
-  const hh = $('hatchhint'); if (hh) { hh.textContent = T('hatch_skip'); hh.classList.add('on'); }
-}
-function chip(h, big) {
-  const r = Math.random, geo = DinoNest.shardGeo(h.L * (big ? 0.9 : 0.55), 0.74 * (big ? 0.9 : 0.55), DinoNest.rngOf((r() * 9999) | 0));
-  const m = new THREE.Mesh(geo, h.mat); m.castShadow = true;
-  const a = r() * 6.28; m.position.set(Math.cos(a) * 0.3, h.yb + 0.02, Math.sin(a) * 0.3);
-  m.userData.v = new THREE.Vector3(Math.cos(a) * (1 + r() * 1.5), 2 + r() * 2, Math.sin(a) * (1 + r() * 1.5)); m.userData.w = new THREE.Vector3(r() * 8, r() * 8, r() * 8);
-  h.grp.add(m); h.chips.push(m);
-}
-const HATCH_END = 7.4;
-function updateHatch(dt) {
-  const h = S.hatch; if (!h) return;
-  let t = clock - h.t0;
-  if (h.skip && t < HATCH_END) { h.t0 -= (HATCH_END - t); t = HATCH_END; }
-  // трещины: прогресс 0 → 1 за 1,2–4,2 с
-  const c = Math.min(1, Math.max(0, (t - 1.2) / 3.0)), want = Math.floor(c * h.segs.length);
-  if (want > h.drawn) {
-    const g = h.g2; g.strokeStyle = 'rgba(28,20,14,.92)'; g.lineCap = 'round';
-    for (let i = h.drawn; i < want; i++) { const sg = h.segs[i]; g.lineWidth = sg.w; g.beginPath(); g.moveTo(sg.a[0], sg.a[1]); g.lineTo(sg.b[0], sg.b[1]); g.stroke(); }
-    h.drawn = want; h.tex.needsUpdate = true;
-    if (Math.random() < 0.5) Audio.sfx('crack');
-  }
-  // яйцо раскачивается толчками: детёныш бьётся изнутри
-  if (!h.burst) {
-    const pulse = Math.pow(Math.max(0, Math.sin(t * 2.3)), 8) * (0.25 + c * 0.9);
-    h.rock.rotation.z = Math.sin(t * 24) * 0.09 * pulse; h.rock.rotation.x = Math.cos(t * 19) * 0.06 * pulse;
-    while (h.knocks.length && t > h.knocks[0]) { h.knocks.shift(); Audio.sfx('crack'); chip(h, false); h.rock.rotation.z += 0.12; }
-  }
-  if (!h.burst && t > 4.35) {
-    h.burst = true; h.rock.rotation.set(0, 0, 0); Audio.sfx('evo'); Audio.sfx('crack');
-    h.capV = new THREE.Vector3(0.9, 3.6, 0.5); h.capW = new THREE.Vector3(2.5, 0.4, 3.2);
-    for (let i = 0; i < 4; i++) chip(h, i < 2);
-    burst(h.grp.position.x, h.floorY + h.yb, h.grp.position.z, 0xf3ead6, 16, 3);
-  }
-  if (h.capV) {   // верхушка скорлупы летит и падает на край гнезда
-    h.capV.y -= 9.8 * dt; h.hi.position.addScaledVector(h.capV, dt); h.hi.rotation.x += h.capW.x * dt; h.hi.rotation.z += h.capW.z * dt;
-    if (h.hi.position.y < 0.12) { h.hi.position.y = 0.12; h.capV.multiplyScalar(0.25); h.capV.y = Math.abs(h.capV.y) * 0.3; h.capW.multiplyScalar(0.5); if (h.capV.length() < 0.3) h.capV = null; }
-  }
-  for (const m of h.chips) { const v = m.userData.v; if (!v) continue; v.y -= 9.8 * dt; m.position.addScaledVector(v, dt); m.rotation.x += m.userData.w.x * dt; m.rotation.z += m.userData.w.z * dt; if (m.position.y < 0.05) { m.position.y = 0.05; m.userData.v = null; m.rotation.x = Math.PI / 2 + Math.random() * 0.6; } }
-  // нижняя половинка заваливается набок, когда детёныш выбрался
-  if (t > 4.95 && h.tip < 1) { h.tip = Math.min(1, h.tip + dt * 2.2); h.lo.rotation.z = -1.35 * h.tip * h.tip; h.lo.position.x = 0.35 * h.tip; h.lo.position.y = 0.18 * Math.sin(h.tip * Math.PI) + 0.05 * h.tip; }
-  if (t > 6.1 && !h.roared) { h.roared = true; if (S.actor) S.actor.dino.userData.bite = 1; Audio.sfx('roar'); }
-  if (t > HATCH_END && !h.done) {
-    h.done = true; $('hud').classList.add('on'); const hh = $('hatchhint'); if (hh) hh.classList.remove('on');
-    UI.banner(TN(CONFIG.BIOME[S.biome].n), 2600);
-    setTimeout(() => { if (S && S.hatch === h) { /* скорлупки остаются в гнезде ещё минуту */ } }, 10);
-    h.cleanAt = clock + 70;
-  }
-  if (h.done) h.blend = Math.min(1, h.blend + dt / 1.3);
-  if (h.cleanAt && clock > h.cleanAt) { h.grp.parent && h.grp.parent.remove(h.grp); h.mat.dispose(); h.tex.dispose(); S.hatch = null; }
-}
-// поза детёныша в катсцене: прячется в яйце, затем выбирается и растёт до своего размера
-function hatchPose(a) {
-  const h = S.hatch; if (!h || h.blend >= 1) return;
-  const t = clock - h.t0, base = Sim.scaleOf(S.profile.level);
-  if (!h.burst) { a.dino.visible = false; a.tag.visible = false; return; }
-  a.dino.visible = true; a.tag.visible = h.done;
-  // 1) из отверстия выглядывает маленькая голова (тело ещё в скорлупе), 2) скорлупа заваливается, 3) детёныш выбирается и растёт
-  const sm = (a0, a1, x) => { const q = Math.min(1, Math.max(0, (x - a0) / (a1 - a0))); return q * q * (3 - 2 * q); };
-  const peek = sm(4.35, 4.95, t), g = sm(5.05, 6.5, t), e = 1 - Math.pow(1 - g, 3);
-  a.dino.scale.setScalar(base * (0.2 + 0.8 * e));
-  const inside = (h.yb - 0.36) * peek - 0.15 * (1 - peek);
-  a.dino.position.y = (h.floorY - S.py) + inside * (1 - e) + 0.08 * Math.sin(g * Math.PI);
-  a.dino.rotation.y = S.me.face + Math.sin(t * 3) * 0.15 * (1 - e);
-}
-const _cq = new THREE.Quaternion(), _cp = new THREE.Vector3(), _tmpCam = new THREE.PerspectiveCamera();
-function hatchCamera(dt) {
-  const h = S.hatch; if (!h || h.blend >= 1) return false;
-  const t = clock - h.t0, gp = h.grp.position, u = Math.min(1, t / HATCH_END), a = h.camA + (u * u * (3 - 2 * u)) * Math.PI * 0.92, R = 3.4 + u * 1.4, lift = h.burst ? 0.9 : 0.55;
-  _tmpCam.position.set(gp.x + Math.sin(a) * R, h.floorY + 1.5 + Math.min(1, t / 7) * 0.5, gp.z + Math.cos(a) * R);
-  _tmpCam.lookAt(gp.x, h.floorY + lift, gp.z);
-  if (h.blend <= 0) { camera.position.copy(_tmpCam.position); camera.quaternion.copy(_tmpCam.quaternion); camera.fov = 50; camera.updateProjectionMatrix(); return true; }
-  return { pos: _tmpCam.position.clone(), q: _tmpCam.quaternion.clone() };
-}
+$('dash').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); doDash(); });
 
-// ---------------------------------------------------------------- камера
-let camDist = 8, camShakeT = 0;
-function placeCamera(dt, px, py, pz, now) {
-  const sc = Sim.scaleOf(S.profile.level), me = S.me;
-  let dist = (4.2 + sc * 3.4) * input.zoom * (me.fly ? 1.25 : 1) * (S.bs && S.bs.st === 'fight' ? 1.4 : 1);
-  const tx = px, ty = py + 1.3 * sc, tz = pz, cp = Math.cos(input.pitch), dx = Math.sin(input.yaw) * cp, dy = Math.sin(input.pitch), dz = Math.cos(input.yaw) * cp;
-  let d = dist;
-  for (let k = 1; k <= 10; k++) {
-    const t = k / 10 * dist, x = tx + dx * t, y = ty + dy * t, z = tz + dz * t;
-    let hit = S.W.heightAt(x, z) + 0.45 > y;
-    if (!hit) { const near = Sim.obstaclesNear(S.W, x, z, 2.5); for (let i = 0; i < near.length; i++) { const o = near[i]; if (o.kind !== 'tree' && o.kind !== 'rock' && o.kind !== 'stone') continue; if (Math.hypot(o.x - x, o.z - z) < o.r + 0.25 && y < o.y + (o.h || 3)) { hit = true; break; } } }
-    if (hit) { d = Math.max(1.4, (k - 1) / 10 * dist); break; }
-  }
-  camDist += (d - camDist) * Math.min(1, dt * (d < camDist ? 25 : 3));
-  let x = tx + dx * camDist, y = ty + dy * camDist, z = tz + dz * camDist;
-  const gy = S.W.heightAt(x, z) + 0.5; if (y < gy) y = gy;
-  if (S.camShake > 0.01) { const s = S.camShake; x += (Math.random() - 0.5) * s; y += (Math.random() - 0.5) * s; z += (Math.random() - 0.5) * s; S.camShake *= Math.pow(0.02, dt); }
-  camera.position.set(x, y, z); camera.lookAt(tx, ty + (CONFIG.isAqua(S.profile.cls) ? camDist * 0.2 : 0), tz);   // в воде динозавр чуть ниже по экрану — лучше видно, что происходит вокруг
-  camera.fov += ((me.fly ? 70 : 62) - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix();
+function sendEmote(i) {
+  if (mode === 'online') wsSend({ t: 'em', e: i });
+  else { emotes.set(myId, { e: i, until: performance.now() + 2200 }); GA.play('emote'); }
 }
+$('emobtns').innerHTML = EMOJI.map((e, i) => `<button data-e="${i}">${e}</button>`).join('');
+$('bEmo').addEventListener('click', () => $('emobtns').classList.toggle('hide'));
+$('emobtns').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { sendEmote(+b.dataset.e); $('emobtns').classList.add('hide'); } });
 
-// ---------------------------------------------------------------- фиксированный шаг (25 Гц): ввод → предсказание → сервер
-function fixedStep() {
-  if (!S.alive) return;
-  const du = S.du, frozen = (du && du.st !== 'fight') || (S.hatch && !S.hatch.done);
-  const raw = readInput(), c = frozen ? { f: 0, s: 0, yaw: raw.yaw, pitch: raw.pitch, jump: false, down: false, sprint: false } : raw;
-  S.seq++; c.q = S.seq;
-  S.prev = { x: S.me.x, y: S.me.y, z: S.me.z };
-  Sim.step(S.me, c, DT, S.W, S.stats);
-  S.running = !!(c.sprint && !S.stats.noSprint && (Math.abs(c.f) + Math.abs(c.s) > 0.1) && S.me.stam > 1 && !S.me.grd && !S.me.fly);
-  S.pending.push(c); if (S.pending.length > 40) S.pending.shift();
-  const r2 = v => Math.round(v * 1000) / 1000;
-  S.conn.send({ t: 'in', q: c.q, f: r2(c.f), s: r2(c.s), yaw: r2(c.yaw), pt: r2(c.pitch), j: c.jump ? 1 : 0, d: c.down ? 1 : 0, sp: c.sprint ? 1 : 0 });
-  const now = performance.now();
-  if (input.atk && !panelOpen && !frozen && now - S.lastAtk > 190) { S.lastAtk = now; S.conn.send({ t: 'act', a: 'atk' }); }
+/* ================= тосты ================= */
+function toast(html) {
+  const d = document.createElement('div'); d.className = 'toast'; d.innerHTML = html; $('toasts').appendChild(d);
+  setTimeout(() => d.remove(), 3700);
+  while ($('toasts').children.length > 3) $('toasts').firstChild.remove();
 }
+Pro.onAch = (a) => { toast(`🏆 ${T('achUnlocked')}: <b>${lang === 'ru' ? a.ru : a.en}</b> +${a.rew} 🪙`); GA.play('ach'); refreshProfileUI(); };
+/* ================= события ================= */
+const infoOf = (id) => roster.get(id) || { name: '…', look: { c: 4, p: 0, h: 0, e: 0, t: 0, s: 0, k: 0 }, bot: false };
+const nameOf = (id) => infoOf(id).name;
+const ADM = '<span class="admtag">Admin</span>';
+const TAGS = { admin: ADM, absolut: '<span class="admtag tg-abs">Absolut</span>', pimba: '<span class="admtag tg-pim">PIMBA</span>' };
+const tagHtml = (t) => TAGS[t] || '';
+const colOf = (id) => { const l = infoOf(id).look; return Cos.SKIN_COL[l.s] || Cos.color(l.c); };
+const posOf = (id) => (lastMap && lastMap.get(id)) || null;
+let curMd = 0;
+function feed(html) {
+  const f = $('killfeed'); const d = document.createElement('div'); d.innerHTML = html; f.appendChild(d);
+  setTimeout(() => d.remove(), 4600); while (f.children.length > 4) f.firstChild.remove();
+}
+function vibe(ms) { try { if (P.opts.vibe && navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+const tileXY = (i) => Sim.TILES.list[i] || { x: 0, y: 0 };
+let crackSnd = 0;
 
-// ---------------------------------------------------------------- кадр: актёры, камера, HUD
-const _s = { x: 0, y: 0, z: 0, f: 0 };
-function flagsAnim(fl) { return { fly: !!(fl & F.FLY), swim: !!(fl & F.SUB), climb: !!(fl & F.CLM), guard: !!(fl & F.GRD) }; }
-// прижимаем к нарисованной земле только тех, кто стоит на ней (в прыжке/полёте/воде поправка плавно исчезает)
-function surfFix(x, y, z) {
-  const W = S.W; if (!S.world.groundFix || W.isWater(x, z)) return 0;
-  const k = 1 - clamp((y - W.heightAt(x, z)) / 1.2, 0, 1); return k > 0 ? S.world.groundFix(x, z) * k : 0;
-}
-// на поверхности воды динозавр качается на волнах и никогда не торчит над водой
-function waveY(x, y, z, water, sc, aq) {
-  if (!water || !S.world.waveAt) return y;
-  const W = S.W, wv = S.world.waveAt(x, z), off = aq ? 1.15 * sc - 0.15 : 0.55 + 0.25 * sc, k = clamp(1 - (W.waterY - y - off) / 1.6, 0, 1);   // у поверхности — качается на волнах, глубже — волны затухают
-  return Math.min(y + wv * k, W.waterY + wv - off);
-}
-function updateActors(dt, t, now) {
-  const me = S.me, W = S.W, a = S.actor;
-  // свой динозавр: интерполяция между шагами предсказания + сглаживание коррекций
-  const k = clamp(S.acc / DT, 0, 1), pv = S.prev || me;
-  S.off.x *= Math.pow(0.0001, dt); S.off.y *= Math.pow(0.0001, dt); S.off.z *= Math.pow(0.0001, dt);
-  const x = pv.x + (me.x - pv.x) * k + S.off.x, y = pv.y + (me.y - pv.y) * k + S.off.y, z = pv.z + (me.z - pv.z) * k + S.off.z;
-  if (S.lastPos) { const v = Math.hypot(x - S.lastPos.x, z - S.lastPos.z) / Math.max(dt, 1e-3); S.speed += (clamp(v / 6, 0, 1.6) - S.speed) * Math.min(1, dt * 12); }
-  S.lastPos = { x, z };
-  const water = W.isWater(me.x, me.z) && me.y < W.waterY + 0.35 && !me.fly && !me.clm;
-  a.update(x, waveY(x, y, z, water, Sim.scaleOf(S.profile.level), CONFIG.isAqua(S.profile.cls)), z, me.face, S.speed, t, dt, { fly: !!me.fly, swim: water, climb: !!me.clm, guard: !!me.grd, run: !!S.running && S.speed > 0.3, vy: me.vy });
-  const dead = !S.alive; a.dino.rotation.z = dead ? 1.45 : 0; a.dino.position.y = (dead ? 0.35 : 0) + (S.world.nestLift ? S.world.nestLift(x, z) : 0) + surfFix(x, y, z);
-  a.group.visible = true; a.dino.visible = true; a.tag.visible = true; { const k = clamp(camDist / 8, 0.5, 1.5); a.tag.scale.set(3.6 * k, 0.9 * k, 1); }
-  if (S.hatch) hatchPose(a); else if (a.dino.userData.hatchFix) { a.dino.userData.hatchFix = false; }
-  shieldFx(a, false); ownShieldRing(a, (S.mp && S.mp.sh > 0) || !!me.grd, t);   // свой щит — кольцо на земле: сфера вокруг камеры превращалась в «табличку»
-  S.px = x; S.py = y; S.pz = z;
-  trN = 0; trAdd(x, z, (S.me.fly || S.W.isWater(x, z) ? 0 : 0.8 + 1.5 * Sim.scaleOf(S.profile.level)), 1);
-  // след за своим динозавром: трава поднимается не сразу, а за пару секунд
-  { trailT -= dt; const mv = Math.hypot(x - trailLast.x, z - trailLast.z); if (trailT <= 0 && mv > 0.6 && !S.me.fly) { trailT = 0.28; trailLast.x = x; trailLast.z = z; trail.push({ x, z, r: 0.7 + 1.2 * Sim.scaleOf(S.profile.level), age: 0 }); if (trail.length > 7) trail.shift(); } }
-  for (let i = trail.length - 1; i >= 0; i--) { const q = trail[i]; q.age += dt; if (q.age > 2.4) trail.splice(i, 1); else trAdd(q.x, q.z, q.r * (1 - q.age / 2.4), 0); }
-  // другие игроки
-  const rt = now - 0.12;
-  for (const p of S.players.values()) {
-    if (!p.buf.length) { p.actor.group.visible = false; continue; }
-    sample(p.buf, rt, _s); const fl = p.flags, an = flagsAnim(fl), dd = Math.hypot(_s.x - x, _s.z - z);
-    if (!an.fly) trAdd(_s.x, _s.z, 0.8 + 1.5 * Sim.scaleOf(p.info.level || 1), 1);
-    const hidden = (fl & F.HIDE) && dd > 7;
-    p.actor.group.visible = !hidden;
-    const water2 = !an.fly && W.isWater(_s.x, _s.z) && _s.y < W.waterY + 0.35;
-    p.actor.update(_s.x, waveY(_s.x, _s.y, _s.z, an.swim || water2, Sim.scaleOf(p.actor.level), CONFIG.isAqua(p.actor.cls)), _s.z, _s.f, clamp(p.speed / 6, 0, 1.6), t, dt, { fly: an.fly, swim: an.swim || water2, climb: an.climb, guard: an.guard });
-    if ((fl & F.ATK) && !(p.prevFlags & F.ATK)) p.actor.dino.userData.bite = 1;
-    p.prevFlags = fl;
-    const d = !!(fl & F.DEAD); p.actor.dino.rotation.z = d ? 1.45 : 0; p.actor.dino.position.y = (d ? 0.35 : 0) + (an.fly ? 0 : surfFix(_s.x, _s.y, _s.z));
-    shieldFx(p.actor, !!(fl & (F.SHIELD | F.GRD)));
-    p.actor.tag.visible = dd < 60; { const k = clamp(Math.hypot(camera.position.x - _s.x, camera.position.z - _s.z) / 12, 0.45, 2.4); p.actor.tag.scale.set(3.6 * k, 0.9 * k, 1); }
-  }
-}
-let _shMat = null;
-function shieldMat() {
-  // только светящийся край пузыря (без плоской заливки): нигде не превращается в «табличку», даже когда сфера уходит в землю
-  return _shMat || (_shMat = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { uC: { value: new THREE.Color(0x6ad0ff) } },
-    vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vN = normalize(normalMatrix * normal); vV = -mv.xyz; gl_Position = projectionMatrix * mv; }',
-    fragmentShader: 'uniform vec3 uC; varying vec3 vN; varying vec3 vV; void main(){ float f = 1.0 - abs(dot(normalize(vN), normalize(vV))); float a = pow(f, 3.0) * 0.55; gl_FragColor = vec4(uC * (0.6 + f), a); }'
-  }));
-}
-function ownShieldRing(actor, on, t) {
-  if (!actor.sring) { const m = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.0, 48), new THREE.MeshBasicMaterial({ color: 0x6ad0ff, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })); m.rotation.x = -Math.PI / 2; m.position.y = 0.08; m.renderOrder = 5; actor.group.add(m); actor.sring = m; }
-  actor.sring.visible = !!on;
-  if (on) { const s = Sim.scaleOf(actor.level) * 2.1 * (1 + 0.06 * Math.sin(t * 5)); actor.sring.scale.set(s, s, s); actor.sring.material.opacity = 0.55 + 0.25 * Math.sin(t * 5); }
-}
-function shieldFx(actor, on) {
-  if (!actor.shield) { actor.shield = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), shieldMat()); actor.shield.renderOrder = 5; actor.group.add(actor.shield); }
-  actor.shield.visible = !!on;
-  if (on) { const s = Sim.scaleOf(actor.level) * 1.9; actor.shield.scale.set(s, s, s); actor.shield.position.y = s * 0.55; }
-}
-const markTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 32; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.beginPath(); g.moveTo(4, 6); g.lineTo(28, 6); g.lineTo(16, 28); g.closePath(); g.fill(); g.strokeStyle = '#000'; g.lineWidth = 2; g.stroke(); return new THREE.CanvasTexture(c); })();
-// примятая трава: собираем динозавров вокруг камеры, самые близкие — в шейдер
-let trN = 0; const trList = [], trail = [], trailLast = { x: 1e9, z: 1e9 }; let trailT = 0;
-function trAdd(x, z, r, near) {
-  if (r <= 0.05) return;
-  const dx = x - camera.position.x, dz = z - camera.position.z, d2 = dx * dx + dz * dz; if (d2 > 3600) return;
-  const o = trList[trN] || (trList[trN] = { x: 0, z: 0, r: 0, d: 0 }); o.x = x; o.z = z; o.r = r; o.d = near ? -1 : d2; trN++;
-}
-function flushTramplers() {
-  const l = trList.slice(0, trN).sort((a, b) => a.d - b.d); S.world.setTramplers(l);
-}
-function updateEnts(dt, t, now) {
-  const rt = now - 0.12, viewD = (CONFIG.QUALITY[qualityName].view || 200) + 30, cp = camera.position;
-  // ближайший враг (до ~11 м) подсвечивается жёлтым контуром — понятно, кого сейчас атакуешь
-  let nearE = null, nearD = (S.W.ocean ? 14 : 11);
-  for (const e of S.ents.values()) { if (e.boss || (e.flags & 16) || !e.group.visible) continue; const q = e.group.position, dq = Math.hypot(q.x - S.px, q.z - S.pz); if (dq < nearD && Math.abs(q.y - S.py) < 12) { nearD = dq; nearE = e; } }
-  for (const e of S.ents.values()) {
-    if (!sample(e.buf, rt, _s)) continue;
-    const g = e.group; g.position.set(_s.x, _s.y + (e.arch && e.arch.fly ? 0 : surfFix(_s.x, _s.y, _s.z)), _s.z); e.model.rotation.y = _s.f;
-    const dd = Math.hypot(_s.x - S.px, _s.z - S.pz), vis = dd < viewD && !(e.flags & 8);
-    g.visible = vis; if (!vis) continue;
-    if (e.boss) trAdd(_s.x, _s.z, 1 + (e.def.size || 3) * 1.2, 0); else if (e.arch && !e.arch.fly && !e.arch.water && !e.arch.tiny) trAdd(_s.x, _s.z, 0.6 + e.arch.size * 1.6, 0);
-    if (e.lastPos) { const v = Math.hypot(_s.x - e.lastPos.x, _s.z - e.lastPos.z) / Math.max(dt, 1e-3); e.speed += (clamp(v / (e.boss ? 4.5 : 6), 0, 1.6) - e.speed) * Math.min(1, dt * 8); }
-    e.lastPos = { x: _s.x, z: _s.z };
-    if (e.boss) animateBoss(e.model, t + e.animT, e.speed, dt, { burrow: !!(e.flags & 64), roar: false });
-    else animateEnemy(e.model, t + e.animT, e.speed, dt, e.flags & 1, e.arch && e.arch.fly, ((e.arch && e.arch.speed) || 180) / 180);
-    if (e.boss && (e.flags & 64)) e.model.position.y = -2.6 * e.def.size / 3; else if (e.boss) e.model.position.y = 0;
-    // подпись и полоска здоровья
-    const friend = !!(e.flags & 16), aggro = !!(e.flags & 2), key = (friend ? 'f' : aggro ? 'a' : 'n');
-    if (!e.tag || e.tagKey !== key) {
-      if (e.tag) g.remove(e.tag);
-      const nm = e.boss ? TN(e.def.n) : TN(e.arch.n), col = friend ? '#9be37a' : aggro ? '#ff8a7a' : e.boss ? '#ffb04a' : '#ffffff';
-      e.tag = makeNameTag(nm, { color: col, sub: e.boss ? '' : T('level_short') + e.lv }); e.tag.position.y = e.tagY + 0.5; g.add(e.tag); e.tagKey = key;
+function handleEvents(evs) {
+  for (const e of evs) {
+    switch (e[0]) {
+      case 'hit':
+        Sc.sparks(e[1], e[2], 30, 4 + Math.round(e[3] * 6), 200 + e[3] * 260); Sc.puff(e[1], e[2], 18, 6 + Math.round(e[3] * 8), 140 + e[3] * 240);
+        GA.play('hit', e[3]);
+        if (e[4] === myId || e[5] === myId) { shake = Math.max(shake, 6 + e[3] * 12); vibe(20 + e[3] * 40); } else shake = Math.max(shake, e[3] * 5);
+        break;
+      case 'dash': {
+        GA.play('dash'); const p = posOf(e[1]);
+        if (p) { Sc.puff(p.x, p.y, 8, 6, 120); if (curMd !== 1) Sc.part({ type: 'scratch', x: p.x, y: p.y, ang: (anim.get(e[1]) || { face: 0 }).face, life: 1.8, col: '#a8c8e2' }); }
+        if (e[1] === myId) Pro.stat('dashes');
+        break;
+      }
+      case 'ko': {
+        GA.play('ko'); const p = posOf(e[1]);
+        if (p) { Sc.ring(p.x, p.y, '#fff', 90); Sc.puff(p.x, p.y, 22, 14, 200, '#bfe6fa'); }
+        feed(e[2] ? `<span style="color:${colOf(e[2])}">${esc(nameOf(e[2]))}</span> 💥 <span style="color:${colOf(e[1])}">${esc(nameOf(e[1]))}</span>` : `<span style="color:${colOf(e[1])}">${esc(nameOf(e[1]))}</span> ${e[3] ? '💫' : '🌊'}`);
+        if (e[1] === myId) { GA.play('lose'); flash = 0.3; Pro.stat('falls'); vibe(80); }
+        if (e[2] === myId && e[2] !== e[1]) {
+          rKo++; Pro.stat('ko'); Pro.statMax('bestKoRound', rKo); Pro.earn(3); matchEarn += 3; refreshProfileUI();
+          if (p) Sc.popup(p.x, p.y, 70, '+8 🪙', '#ffe08a'); GA.play('coin'); shake = Math.max(shake, 10);
+        }
+        break;
+      }
+      case 'splash': Sc.ring(e[1], e[2], '#bfe6fa', 110); Sc.puff(e[1], e[2], 10, 12, 160, '#8fd0f5'); GA.play('splash'); break;
+      case 'pick': {
+        const k = e[4] | 0; GA.play(k === 3 ? 'shield' : 'pick'); Sc.puff(e[2], e[3], 30, 12, 160, `rgb(${Sc.PK[k].c})`);
+        const p = posOf(e[1]); if (p) Sc.popup(p.x, p.y, 110, T('pk')[k], '#fff');
+        if (e[1] === myId) Pro.stat('picks');
+        break;
+      }
+      case 'fish': {
+        const p = posOf(e[1]); GA.play('pick'); Sc.puff(e[2], e[3], 20, 10, 140, e[4] === 3 ? '#ffe35a' : '#ffb44d');
+        if (p) Sc.popup(p.x, p.y, 110, T('fishGot', e[4]), e[4] === 3 ? '#ffe35a' : '#fff');
+        if (e[1] === myId) Pro.stat('picks');
+        break;
+      }
+      case 'wallsw': GA.play('hit'); shake = Math.max(shake, 6); break;
+      case 'snow': Sc.puff(e[1], e[2], 26, 10, 200, '#ffffff'); Sc.ring(e[1], e[2], '#bfe6fa', 160); GA.play('hit'); break;
+      case 'freeze': Sc.ring(e[1], e[2], '#9fe6ff', 300, 0.9); for (let i = 0; i < 14; i++) { const a = Math.random() * TAU, s = 100 + Math.random() * 220; Sc.part({ type: 'star', x: e[1], y: e[2], z: 20, vx: Math.cos(a) * s, vy: Math.sin(a) * s, vz: 80, life: 0.8, r: 6, col: '#c8f3ff', rot: Math.random() * 6 }); } GA.play('freeze'); shake = Math.max(shake, 6); break;
+      case 'shock': Sc.ring(e[1], e[2], '#ffae5c', 330, 0.7); Sc.ring(e[1], e[2], '#fff', 220, 0.5); GA.play('shock'); shake = Math.max(shake, 14); break;
+      case 'wind': windFlash = performance.now() + 1700; GA.play('wind'); break;
+      case 'go': GA.play('go'); goFlash = performance.now() + 900; rKo = 0; break;
+      case 'start': matchEarn = 0; finalShown = false; finalInfo = null; rKo = 0; roundsPlayed = 0; break;
+      case 'lobby': finalShown = false; finalInfo = null; break;
+      case 'mode': Sc.clearParts(); rKo = 0; camF.init = false; GA.play('join'); break;
+      case 'res': {
+        const my = e[1].find((r) => r[0] === myId); roundsPlayed++;
+        if (my) {
+          const gain = 2 + my[2] * 2; Pro.earn(gain); matchEarn += gain;
+          if (my[1] === 1) { Pro.stat('roundWins'); Pro.modeWin(e[2]); Pro.earn(8); matchEarn += 8; GA.play('win'); }
+          refreshProfileUI();
+        }
+        break;
+      }
+      case 'final': {
+        const rk = e[1], n = rk.length, place = rk.indexOf(myId) + 1;
+        finalInfo = { place, n, kind: e[2], first: rk[0] };
+        if (place > 0) {
+          Pro.stat('matches'); Pro.earn(8); matchEarn += 8;
+          if (e[2] === 0) Pro.stat('tours');
+          if (place === 1) { Pro.stat('matchWins'); Pro.earn(25); matchEarn += 25; if (e[2] !== 1) Pro.stat('tourWins'); yLeaderboard(P.stats.matchWins); }
+          if (place <= 3 && e[2] !== 1 && n >= 3) Pro.stat('podium');
+          if (mode === 'online' && !roomPub && [...roster.values()].filter((r) => !r.bot).length >= 2) Pro.stat('friendMatches');
+          if (place === n && n > 1) setTimeout(() => toast(T('caged')), 900);
+          refreshProfileUI();
+        }
+        GA.play(place === 1 ? 'win' : 'lose'); if (place === 1) flash = 0.3;
+        break;
+      }
+            case 'throw': { GA.play('throw'); const p = posOf(e[1]); if (p) Sc.puff(p.x, p.y, 30, 5, 80, '#fff'); break; }
+      case 'snowpuff': Sc.puff(e[1], e[2], 30, 8, 120, '#fff'); break;
+      case 'snowhit': { Sc.puff(e[1], e[2], 40, 10, 150, '#fff'); Sc.sparks(e[1], e[2], 40, 4, 160); GA.play('hit', 0.5); if (e[3] === myId) { shake = Math.max(shake, 10); vibe(40); } break; }
+      case 'tfire': { GA.play('throw'); Sc.puff(e[2], e[3], 36, 6, 120, '#ffd9a0'); Sc.sparks(e[2], e[3], 20, 5, 140); break; }
+      case 'tspark': Sc.sparks(e[1], e[2], 24, 4, 120); Sc.puff(e[1], e[2], 20, 5, 90, '#ddd'); break;
+      case 'thit': { Sc.puff(e[1], e[2], 60, 12, 170, '#ff9d4d'); Sc.sparks(e[1], e[2], 60, 7, 260); Sc.ring(e[1], e[2], '#ff9d4d', 160, 0.5); GA.play('hit', 0.8); if (e[3] === myId) { shake = Math.max(shake, 16); vibe(80); } break; }
+      case 'trespawn': { Sc.ring(e[1], e[2], '#9be8ff', 140, 0.6); Sc.sparks(e[1], e[2], 24, 5, 160); break; }
+      case 'fgrab': { GA.play('shock'); if (e[1] === myId) toast('🚩 ' + T('gotFlag')); break; }
+      case 'fdrop': Sc.ring(e[1], e[2], '#ffffff', 130, 0.6); break;
+      case 'fback': GA.play('click'); break;
+      case 'fcap': { Sc.ring(e[3], e[4], e[1] ? '#3fa0ff' : '#ff5d5d', 260, 0.9); Sc.sparks(e[3], e[4], 50, 9, 300); GA.play('win'); toast((e[1] ? '🔵 ' : '🔴 ') + T('flagCap')); break; }
+      case 'crown': { Sc.ring(e[1], e[2], '#ffd23f', 170, 0.7); Sc.sparks(e[1], e[2], 30, 8, 220); GA.play('shock'); if (e[3] === myId) toast(T('youCrown')); break; }
+      case 'goal': { Sc.ring(e[1], e[2], '#ffffff', 200, 0.8); Sc.sparks(e[1], e[2], 40, 8, 260); GA.play(e[3] === myId ? 'win' : 'pick'); Sc.popup(e[1], e[2], 100, '+1', '#ffd23f'); break; }
+      case 'back': { const p = posOf(e[1]); if (p) Sc.puff(p.x, p.y, 8); GA.play('hit'); if (e[1] === myId) { toast('🔴 ' + (lang === 'ru' ? 'Двигался на красный! Назад на старт' : 'Moved on red! Back to start')); shake = Math.max(shake, 10); } break; }
+      case 'stop': GA.play('go'); break;
+      case 'judge': GA.play('splash'); break;
+      case 'sink': GA.play('crack'); break;
+      case 'red': case 'warn': GA.play('tick'); break;
+      case 'pass': { Sc.ring(e[1], e[2], '#ff8a1c', 160, 0.6); Sc.sparks(e[1], e[2], 40, 8, 240); GA.play('shock'); if (e[3] === myId) toast(T('pass')); break; }
+      case 'boom': { Sc.part({ type: 'boom', x: e[1], y: e[2], z: 30, life: 0.8, gr: 300 }); Sc.ring(e[1], e[2], '#ffae5c', 300, 0.7); Sc.puff(e[1], e[2], 30, 30, 260, '#555', 6); GA.play('boom'); shake = Math.max(shake, 22); vibe(120); break; }
+      case 'crack': { const t = tileXY(e[1]); Sc.puff(t.x, t.y, 10, 4, 60, '#dff4ff'); if (performance.now() - crackSnd > 90) { crackSnd = performance.now(); GA.play('crack'); } break; }
+      case 'tile': { const t = tileXY(e[1]); for (let i = 0; i < 5; i++) Sc.chunk(t.x + (Math.random() - 0.5) * 80, t.y + (Math.random() - 0.5) * 80, (Math.random() - 0.5) * 80, (Math.random() - 0.5) * 80); Sc.ring(t.x, t.y, '#bfe6fa', 120); GA.play('splash'); break; }
+      case 'hop': { GA.play('hop'); const p = posOf(e[1]); if (p) Sc.puff(p.x, p.y, 4, 6, 100, '#fff'); break; }
+      case 'hurt': { Sc.sparks(e[2], e[3], 40, 8, 240); Sc.popup(e[2], e[3], 100, '💔', '#ff6b8b'); GA.play('hit', 0.7); if (e[1] === myId) { shake = Math.max(shake, 14); flash = 0.2; vibe(70); } break; }
+      case 'drift': { Sc.puff(e[1], e[2], 70, 14, 220, '#fff'); Sc.sparks(e[1], e[2], 30, 6, 220); GA.play('hit', 0.6); if (e[3] === myId) { shake = Math.max(shake, 10); vibe(40); } break; }
+      case 'pad': { GA.play('pad'); const p = posOf(e[1]); if (p) Sc.sparks(p.x, p.y, 10, 8, 200); break; }
+      case 'lap': { GA.play('lap'); if (e[1] === myId) toast('🏁 ' + T('lap', e[2])); break; }
+      case 'finish': { GA.play(e[1] === myId ? 'win' : 'lap'); feed(`🏁 <span style="color:${colOf(e[1])}">${esc(nameOf(e[1]))}</span> — ${e[2]}`); if (e[1] === myId) toast('🏁 ' + T('fin', e[2])); break; }
     }
-    e.tag.visible = dd < (e.boss ? 90 : 38); { const k = clamp(Math.hypot(camera.position.x - _s.x, camera.position.z - _s.z) / 12, 0.45, e.boss ? 4 : 2.4); e.tag.scale.set(3.6 * k, 0.9 * k, 1); }
-    if (e.olOn && now > e.olUntil) { e.olOn = false; e.olY = false; setOutline(e.model, false); }
-    if (!e.olOn) { const yel = e === nearE; if (yel && !e.olY) { e.olY = true; setOutline(e.model, true, 0xffd23a); } else if (!yel && e.olY) { e.olY = false; setOutline(e.model, false); } }
-    e.bar.visible = !e.boss && dd < (S.W.ocean ? 70 : 48) && (e.hp < e.mhp || aggro); if (e.bar.visible) { e.bar.setFill(e.mhp > 0 ? e.hp / e.mhp : 1); e.bar.quaternion.copy(camera.quaternion); const bk = clamp(dd / 14, 0.8, 2.6); e.bar.scale.set(bk, bk, 1); }
-    // чутьё: метки добычи и врагов сквозь рельеф
-    if (S.sense && !e.boss && dd < S.sense && dd > 9) {
-      if (!e.mark) { e.mark = new THREE.Sprite(new THREE.SpriteMaterial({ map: markTex, depthTest: false, transparent: true, opacity: 0.9 })); e.mark.scale.set(0.9, 0.9, 1); e.mark.renderOrder = 15; g.add(e.mark); }
-      e.mark.visible = true; e.mark.position.y = e.tagY + 1.4; e.mark.material.color.setHex(friend ? 0x9be37a : e.arch.role === 'hostile' ? 0xff4a3a : e.arch.role === 'herd' ? 0xffd35a : 0x6ccf4a);
-    } else if (e.mark) e.mark.visible = false;
   }
 }
 
-// ---------------------------------------------------------------- HUD
-// значок игрока-друга на картах: яркий ромб с белой обводкой и первой буквой ника (боты — серые), чтобы не путать с точками зверей
-function friendMark(g, x, y, r, info, bot, rot) {
-  g.save(); g.translate(x, y); g.rotate(rot || 0);
-  g.beginPath(); g.moveTo(0, -r * 1.35); g.lineTo(r, 0); g.lineTo(0, r * 1.35); g.lineTo(-r, 0); g.closePath();
-  g.fillStyle = bot ? '#b8b8b8' : '#ff4fd8'; g.fill(); g.lineWidth = Math.max(1.6, r * 0.28); g.strokeStyle = '#fff'; g.stroke();
-  const ch = String((info && info.nick) || '?').trim().charAt(0).toUpperCase();
-  if (ch && !bot) { g.fillStyle = '#fff'; g.font = 'bold ' + Math.round(r * 1.25) + 'px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineWidth = 2; g.strokeStyle = 'rgba(80,0,70,.9)'; g.strokeText(ch, 0, r * 0.08); g.fillText(ch, 0, r * 0.08); }
-  g.restore();
+/* ================= жизненный цикл ================= */
+const SCREENS = ['menu', 'tourney', 'modes', 'clicker', 'wardrobe', 'achs', 'settings', 'account', 'toplist'];
+function showScreen(id) {
+  for (const s of SCREENS) $(s).classList.toggle('hide', s !== id);
+  if (id === 'clicker') Clicker.open();
+  if (id === 'menu') showMsg('');
 }
-const miniCv = $('mini-cv'), miniCtx = miniCv.getContext('2d');
-function drawMinimap() {
-  const g = miniCtx, N = miniCv.width, c = N / 2, R = 130, k = c / R, w = S.world, me = S.me;
-  g.clearRect(0, 0, N, N); g.save(); g.beginPath(); g.arc(c, c, c, 0, TWO_PI); g.clip(); g.fillStyle = '#0a1410'; g.fillRect(0, 0, N, N);
-  g.translate(c, c); g.rotate(input.yaw);
-  const size = w.mapSize; g.drawImage(w.minimap, -(S.px + size / 2) * k, -(S.pz + size / 2) * k, size * k, size * k);
-  const dot = (x, z, col, r) => { g.fillStyle = col; g.beginPath(); g.arc((x - S.px) * k, (z - S.pz) * k, r, 0, TWO_PI); g.fill(); };
-  const W = S.W;
-  if (!W.duel) {
-    dot(W.nest.x, W.nest.z, '#ffd35a', 4); dot(W.portalIn.x, W.portalIn.z, '#e8573f', 5);
-    if (W.features && W.features.caves) for (const c of W.features.caves) { g.strokeStyle = '#e8f4ff'; g.lineWidth = 3; g.beginPath(); g.moveTo((c.x - Math.cos(c.a) * c.L / 2 - S.px) * k, (c.z - Math.sin(c.a) * c.L / 2 - S.pz) * k); g.lineTo((c.x + Math.cos(c.a) * c.L / 2 - S.px) * k, (c.z + Math.sin(c.a) * c.L / 2 - S.pz) * k); g.stroke(); }
-    if (S.profile.cls === 'herb' && S.drops) for (const d of S.drops) if (d[3] === 'plant') dot(d[0], d[2], '#c8ff4a', 3);   // еда травоядного — на мини-карте
-    if (S.pt && S.pt.next) dot(W.portalNext.x, W.portalNext.z, '#9be37a', 5);
+
+function startPlay(m) {
+  mode = m; showMsg('');
+  showScreen(null); $('hud').classList.remove('hide');
+  anim.clear(); emotes.clear(); Sc.clearParts(); V = null; lastMap = null; acc = 0; lastT = performance.now(); finalShown = false; finalInfo = null; matchEarn = 0; rKo = 0; camF.init = false;
+  $('killfeed').innerHTML = ''; lobbySig = ''; $('roomline').innerHTML = '';
+  for (const id of ['intro', 'over', 'final', 'finalTop', 'lobby']) $(id).classList.add('hide');
+  if (m === 'online') {
+    $('roomline').innerHTML = `${T('room')}: <span id="roomcode">${roomCode}</span> <span id="pingv"></span>`;
+    $('roomcode').addEventListener('click', shareRoom);
+    net.pingTimer = setInterval(() => wsSend({ t: 'ping', ts: Date.now() }), 2000);
+    net.timer = setInterval(() => sendIn(false, false), 50);
   }
-  const sr = Math.max(34, S.sense || 0);
-  for (const e of S.ents.values()) {
-    const p = e.group.position;                                           // видно всех врагов в зоне сервера, а не только ближних
-    if (e.boss) { dot(p.x, p.z, '#ff3a2a', 6); continue; }
-    const hostile = e.arch.role === 'hostile', col = (e.flags & 16) ? '#9be37a' : hostile ? '#ff5a4a' : e.arch.role === 'herd' ? '#ffd35a' : e.arch.role === 'fish' || e.arch.role === 'bug' ? '#6ad8ff' : '#8cff7a';
-    dot(p.x, p.z, '#000', (hostile ? 4.2 : 3.2)); dot(p.x, p.z, col, hostile ? 3.1 : 2.2);
+  $('hint').textContent = '';
+  yPlay(true);
+}
+
+function shareRoom() {
+  const url = location.protocol.startsWith('http') && !/yandex/.test(location.hostname) ? `${location.origin}${location.pathname}?room=${roomCode}` : '';
+  const txt = `${T('title')} — ${T('room')}: ${roomCode}`;
+  let done = false;
+  try { if (navigator.share) { navigator.share({ title: T('title'), text: txt, url: url || undefined }).catch(() => {}); done = true; } } catch (e) {}
+  if (!done) { try { navigator.clipboard.writeText(url || roomCode); toast(T('copied')); } catch (e) {} }
+}
+
+function startOffline(c) {
+  GA.init();
+  c = Object.assign({ kind: 0, len: 3, mode: 0, chaos: 0, diff: diffSel }, c || {}, { bots: 1 });
+  game = new Game({ lobby: false });
+  game.applyCfg(c);
+  const p = game.addPlayer(P.name || 'Penguin', lookNow(), false); p.adm = !!(Pro.Acc.token && Pro.Acc.admin);
+  myId = p.id; roster = new Map(); game.startMatch();
+  startPlay('offline');
+}
+
+function leaveToMenu() {
+  const hadRounds = roundsPlayed >= 2;
+  clearInterval(net.timer); clearInterval(net.pingTimer);
+  if (net.ws) { const w = net.ws; net.ws = null; try { w.close(); } catch (e) {} }
+  document.body.classList.remove('fin');
+  mode = 'menu'; game = null; V = null; lastMap = null; keys.clear(); joy.active = false; joy.id = -1; myId = 0; roster = new Map();
+  $('hud').classList.add('hide'); showScreen('menu'); $('emobtns').classList.add('hide'); $('cfgSheet').classList.add('hide');
+  for (const id of ['intro', 'over', 'final', 'finalTop', 'lobby']) $(id).classList.add('hide');
+  Sc.clearParts(); yPlay(false); fetchOnline(); refreshProfileUI(); GA.setIntensity(0);
+  if (pendingReload) { location.reload(); return; }
+  if (hadRounds) { roundsPlayed = 0; yAd(() => {}); }
+}
+$('bExit').addEventListener('click', () => { GA.play('click'); leaveToMenu(); });
+
+/* ================= представление мира ================= */
+function makeView(last, a, b, k, over) {
+  const players = [];
+  for (const [id, pb] of last.map) {
+    const pa = a.map.get(id) || pb, pb2 = b.map.get(id) || pb;
+    let x, y;
+    if (over > 0) { x = pb.x + pb.vx * over; y = pb.y + pb.vy * over; }
+    else { x = pa.x + (pb2.x - pa.x) * k; y = pa.y + (pb2.y - pa.y) * k; }
+    const f = pb.fl;
+    players.push({ id, x, y, vx: pb.vx, vy: pb.vy, alive: !!(f & 1), dash: !!(f & 2), boost: !!(f & 4), spec: !!(f & 8), frozen: !!(f & 16), shield: !!(f & 32), hot: !!(f & 64), inv: !!(f & 128), airF: !!(f & 256), cd: pb.cd, score: pb.score, fall: pb.fall, a: pb.a, b: pb.b, fin: pb.b, faceRaw: pb.face });
   }
-  for (const p of S.players.values()) { const q = p.actor.group.position; friendMark(g, (q.x - S.px) * k, (q.z - S.pz) * k, 7.5, p.info, p.info.bot, -input.yaw); }
-  g.restore();
-  // игрок — стрелка по центру, компас по ободу
-  g.save(); g.translate(c, c); g.rotate(Math.PI - S.me.face + input.yaw); g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 2;
-  g.beginPath(); g.moveTo(0, -9); g.lineTo(6, 7); g.lineTo(0, 3); g.lineTo(-6, 7); g.closePath(); g.stroke(); g.fill(); g.restore();
-  const nx = c + Math.sin(input.yaw) * (c - 13), ny = c - Math.cos(input.yaw) * (c - 13);
-  g.fillStyle = 'rgba(0,0,0,.55)'; g.beginPath(); g.arc(nx, ny, 10, 0, TWO_PI); g.fill(); g.fillStyle = '#ff6a5a'; g.font = 'bold 14px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(window.I18N.lang === 'ru' ? 'С' : 'N', nx, ny + 1);
+  return { ph: last.ph, tm: last.tm, el: last.el, rd: last.rd, rs: last.rs, md: last.md, w: last.w, ex: last.ex || {}, o: last.o || [], lr: last.lr, fr: last.fr, players };
 }
-// ---------------------------------------------------------------- большая карта (Tab; на телефоне — нажать на мини-карту)
-let mapOpen = false;
-const bigCv = $('bigmap-cv'), bigCtx = bigCv.getContext('2d');
-function toggleMap(on) {
-  mapOpen = on === undefined ? !mapOpen : !!on;
-  $('bigmap').classList.toggle('on', mapOpen);
-  if (mapOpen) { if (document.pointerLockElement) document.exitPointerLock(); drawBigMap(); }
+
+function pushC(me, ox, oy, orad, bounce, damp) {
+  const dx = me.x - ox, dy = me.y - oy, d = Math.hypot(dx, dy), min = orad + PR * 0.85;
+  if (d < min && d > 0) {
+    const nx = dx / d, ny = dy / d; me.x = ox + nx * min; me.y = oy + ny * min;
+    const vn = me.vx * nx + me.vy * ny; if (vn < 0) { me.vx -= (1 + bounce) * vn * nx; me.vy -= (1 + bounce) * vn * ny; }
+    me.vx *= damp; me.vy *= damp;
+  }
 }
-// на телефоне — касание мини-карты открывает карту, касание карты закрывает (preventDefault: без «призрачного» клика)
-$('mini').addEventListener('touchend', e => { e.preventDefault(); if (S && S.welcomed) toggleMap(true); }, { passive: false });
-$('mini').addEventListener('click', () => { if (S && S.welcomed) toggleMap(true); });
-$('bigmap').addEventListener('touchend', e => { e.preventDefault(); toggleMap(false); }, { passive: false });
-$('bigmap').addEventListener('click', () => toggleMap(false));
-// крестик и кнопка «Закрыть»: закрывают карту сразу при касании (touchstart/pointerdown), не полагаясь на всплытие до фона
-['bigmap-x', 'bigmap-close'].forEach(id => {
-  const b = $(id); if (!b) return;
-  const close = e => { e.preventDefault(); e.stopPropagation(); toggleMap(false); };
-  b.addEventListener('touchstart', close, { passive: false });
-  b.addEventListener('pointerdown', close);
-  b.addEventListener('click', close);
+const WALL_R = { 2: 350, 3: 345, 4: 350, 5: 350, 7: 350, 8: 350, 9: 350, 10: 348, 12: 350, 13: 430, 14: 348, 16: 350, 17: 355 };
+function wallFix(me, md) {
+  if (md === 18) { Sim.tankWalls(me); return; }
+  if (md === 9) { (Sim.YETI.layouts[curW] || Sim.YETI).push(me); return; }
+  if (md === 3) {
+    const CR = Sim.CROWN, lx = CR.AW - PR * 0.9, ly = CR.AH - PR * 0.9;
+    if (me.x > lx) { me.x = lx; if (me.vx > 0) me.vx *= -0.55; } else if (me.x < -lx) { me.x = -lx; if (me.vx < 0) me.vx *= -0.55; }
+    if (me.y > ly) { me.y = ly; if (me.vy > 0) me.vy *= -0.55; } else if (me.y < -ly) { me.y = -ly; if (me.vy < 0) me.vy *= -0.55; }
+    for (const o of CR.pillars) pushC(me, o.x, o.y, o.r, 0.5, 1);
+    return;
+  }
+  if (md === 1) {
+    const mpi = V && V.ex && V.ex.mp != null ? V.ex.mp : 0;
+    RACE.edge(me, RACE.track(mpi));
+    return;
+  }
+  const R = md === -1 ? 360 : WALL_R[md];
+  if (R) {
+    const d = Math.hypot(me.x, me.y), lim = R - PR * 0.6;
+    if (d > lim) { const nx = me.x / d, ny = me.y / d; me.x = nx * lim; me.y = ny * lim; const vn = me.vx * nx + me.vy * ny; if (vn > 0) { me.vx -= 1.5 * vn * nx; me.vy -= 1.5 * vn * ny; } }
+  }
+  if (md === 4) for (const o of SNOW_OBS) pushC(me, o.x, o.y, o.r, 0.25, 1);
+}
+
+let curW = 0;
+function buildOnline(now, dt) {
+  const sn = net.snaps; if (!sn.length) return null;
+  const last = sn[sn.length - 1];
+  curW = (last.ex && last.ex.w) | 0;
+  const rt = now - 110;
+  let a = sn[0], b = sn[0];
+  for (let i = sn.length - 1; i >= 0; i--) { if (sn[i].at <= rt) { a = sn[i]; b = sn[Math.min(i + 1, sn.length - 1)]; break; } a = sn[i]; b = sn[i]; }
+  let k = 0; if (b !== a && b.at > a.at) k = Math.min(1, Math.max(0, (rt - a.at) / (b.at - a.at)));
+  const over = rt > last.at ? Math.min(0.15, (rt - last.at) / 1000) : 0;
+  const v = makeView(last, a, b, k, over);
+  curMd = last.md;
+  const me = net.me, mp = v.players.find((p) => p.id === myId);
+  if (me && mp && (last.ph === 1 || last.ph === 4) && mp.alive && !mp.spec) {
+    const md = last.ph === 4 ? -1 : last.md, M = md < 0 ? MODES[0] : MODES[md], ph = M.phys;
+    const iv = mp.frozen ? { x: 0, y: 0 } : getInputVec();
+    let slowK = 1; if (md === 1) for (const o of last.o) if (o[0] === 11 && Math.hypot(me.x - o[2], me.y - o[3]) < o[4]) { slowK = 0.45; break; }
+    const kk0 = ph.acc * (mp.boost ? (ph.boostAcc || 1.15) : 1) * (mp.hot ? (md === 3 ? 1.1 : 1.2) : 1) * slowK * (md === 9 && last.ex && last.ex.S && last.ex.S.includes(myId) ? 1.06 : 1);
+    me.vx += iv.x * kk0 * dt; me.vy += iv.y * kk0 * dt;
+    const f = Math.exp(-ph.fric * (mp.frozen ? 2.4 : 1) * dt); me.vx *= f; me.vy *= f; me.x += me.vx * dt; me.y += me.vy * dt;
+    wallFix(me, md);
+    if (me.srv) {
+      // сервер видит нас с задержкой ≈ пинг/2 (+ ввод идёт ещё пинг/2) — экстраполируем на это время, иначе при пинге 200 тянет назад
+      const lat = Math.min(0.3, (net.ping || 0) / 1000);
+      const age = Math.min(0.5, (now - me.srvAt) / 1000 + lat);
+      const tx = me.srv.x + me.srv.vx * age, ty = me.srv.y + me.srv.vy * age;
+      const gr = now < (me.dashGrace || 0) ? 0.15 : 1; // после рывка сервер ещё не знает о нём — не тянем назад
+      const kp = Math.min(1, dt * 6 * gr);
+      me.x += (tx - me.x) * kp; me.y += (ty - me.y) * kp;
+      const kv = Math.min(1, dt * 3 * gr);
+      me.vx += (me.srv.vx - me.vx) * kv; me.vy += (me.srv.vy - me.vy) * kv;
+    }
+    mp.x = me.x; mp.y = me.y; mp.vx = me.vx; mp.vy = me.vy;
+    if (ph.dashV > 0 && !M.onDash) mp.cd = Math.max(0, (me.cdUntil - now) / (ph.dashCD * 1000));
+  } else if (me && mp) { me.x = mp.x; me.y = mp.y; me.vx = mp.vx; me.vy = mp.vy; }
+  return v;
+}
+
+/* ================= рендер ================= */
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+}
+window.addEventListener('resize', resize); resize();
+const wrapPi = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
+
+function spawnTrails(p, an, dt, now) {
+  const tr = p.look.t | 0; if (!tr || !p.alive) return;
+  const sp = Math.hypot(p.vx, p.vy); if (sp < 130) return;
+  an.trail = (an.trail || 0) + dt; if (an.trail < 0.045) return; an.trail = 0;
+  const bx = p.x - Math.cos(an.face) * 22, by = p.y - Math.sin(an.face) * 22, rv = () => (Math.random() - 0.5) * 50;
+  if (tr === 1) Sc.part({ type: 'dot', x: bx, y: by, z: 8, vx: rv(), vy: rv(), vz: 40, life: 0.6, r: 5 + Math.random() * 4, col: '#fff' });
+  else if (tr === 2) Sc.part({ type: 'heart', x: bx, y: by, z: 20, vx: rv(), vy: rv() * 0.4, vz: 50, life: 0.9, r: 7 + Math.random() * 3, col: '#ff5fa0' });
+  else if (tr === 3) Sc.part({ type: 'star', x: bx, y: by, z: 15, vx: rv(), vy: rv(), vz: 50, life: 0.8, r: 7, col: '#ffe35a', rot: Math.random() * 6 });
+  else if (tr === 4) Sc.part({ type: 'fire', x: bx, y: by, z: 14, vx: rv(), vy: rv(), vz: 30, life: 0.45, r: 10 + Math.random() * 4, col: Math.random() < 0.5 ? '#ff8a1c' : '#ff4a1c' });
+  else if (tr === 5) Sc.part({ type: 'dot', x: bx, y: by, z: 12, vx: 0, vy: 0, vz: 0, life: 0.7, r: 8, col: `hsl(${(now / 4) % 360},95%,60%)` });
+  else if (tr === 6) Sc.part({ type: 'glyph', txt: '🫧', x: bx, y: by, z: 10, vx: rv() * 0.6, vy: rv() * 0.6, vz: 60, life: 0.9, r: 6 });
+  else if (tr === 7) Sc.part({ type: 'star', x: bx, y: by, z: 22, vx: rv() * 1.4, vy: rv() * 1.4, vz: 120, life: 0.8, r: 5 + Math.random() * 3, col: `hsl(${Math.random() * 360},95%,62%)`, rot: Math.random() * 6 });
+  else if (tr === 8) Sc.part({ type: 'glyph', txt: '⚡', x: bx, y: by, z: 18, vx: rv() * 0.5, vy: rv() * 0.5, vz: 20, life: 0.4, r: 7 });
+  else if (tr === 9) Sc.part({ type: 'glyph', txt: ['🍃', '🍂'][Math.random() * 2 | 0], x: bx, y: by, z: 24, vx: rv() * 0.8, vy: rv() * 0.8, vz: 10, life: 1.0, r: 6 });
+  else if (tr === 10) Sc.part({ type: 'glyph', txt: '🌸', x: bx, y: by, z: 24, vx: rv() * 0.8, vy: rv() * 0.8, vz: 25, life: 1.0, r: 6 });
+  else if (tr === 11) Sc.part({ type: 'dot', x: bx, y: by, z: 14, vx: rv() * 0.4, vy: rv() * 0.4, vz: 20, life: 0.9, r: 10 + Math.random() * 5, col: 'rgba(210,215,225,.7)' });
+  else if (tr === 12) Sc.part({ type: 'glyph', txt: '🐟', x: bx, y: by, z: 16, vx: rv() * 0.5, vy: rv() * 0.5, vz: 40, life: 0.8, r: 6 });
+  else if (tr === 13) Sc.part({ type: 'glyph', txt: ['🎵', '🎶'][Math.random() * 2 | 0], x: bx, y: by, z: 24, vx: rv() * 0.6, vy: rv() * 0.6, vz: 35, life: 0.9, r: 6 });
+  else if (tr === 14) Sc.part({ type: 'fire', x: bx, y: by, z: 14, vx: rv() * 2, vy: rv() * 2, vz: 60, life: 0.35, r: 4 + Math.random() * 2, col: Math.random() < 0.5 ? '#fff3a0' : '#ffd23f' });
+  else if (tr === 15) Sc.part({ type: 'star', x: bx, y: by, z: 20, vx: rv() * 0.8, vy: rv() * 0.8, vz: 30, life: 1.0, r: 5 + Math.random() * 4, col: ['#b58cff', '#6fb4ff', '#ff8fe0', '#fff'][Math.random() * 4 | 0], rot: Math.random() * 6 });
+}
+
+function sceneList(now, dt) {
+  const list = [];
+  for (const p of V.players) {
+    const info = infoOf(p.id);
+    let an = anim.get(p.id); if (!an) { an = { face: p.faceRaw || Math.PI / 2, walk: 0, trail: 0, airOn: false, airT: 0 }; anim.set(p.id, an); }
+    const sp = Math.hypot(p.vx, p.vy);
+    let target = p.faceRaw;
+    if (p.id === myId && p.alive && !p.frozen) { const iv = getInputVec(); if (Math.hypot(iv.x, iv.y) > 0.15) target = Math.atan2(iv.y, iv.x); }
+    an.face += wrapPi(target - an.face) * Math.min(1, dt * 14); an.walk += sp * dt * 0.06;
+    let air = 0;
+    if (p.airF) { if (!an.airOn) { an.airOn = true; an.airT = now; } air = Math.min(1, (now - an.airT) / 550); } else an.airOn = false;
+    const q = Object.assign({}, p, { name: info.name, adm: info.adm, look: info.look, face: an.face, walk: an.walk, isMe: p.id === myId, ring: p.id === myId && p.alive && !p.spec, air });
+    spawnTrails(q, an, dt, now);
+    const em = emotes.get(p.id); if (em && em.until > now) q.emote = { e: EMOJI[em.e], k: (em.until - now) / 2200 };
+    list.push(q);
+  }
+  return list;
+}
+
+function render(now, dt) {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const t = now / 1000;
+  if (mode === 'menu' || !V) { Sc.drawMenuBg(ctx, W, H, t, dt); return; }
+  if (V.ph === 3 && V.fr && V.fr.length) {
+    const rank = [];
+    V.fr.forEach((id, i) => { const pl = V.players.find((q) => q.id === id), inf = infoOf(id); rank.push({ id, name: inf.name, look: inf.look, score: pl ? pl.score : 0, place: i + 1, isMe: id === myId }); });
+    Sc.drawPodium(ctx, W, H, rank, t, dt, { confetti: true });
+    return;
+  }
+  const lobby = V.ph === 4, md = lobby ? 0 : V.md, M = MODES[md];
+  const list = sceneList(now, dt);
+  const view = lobby ? { r: 400 } : M.view;
+  if (view.follow) {
+    let tg = list.find((p) => p.id === myId && p.alive && !p.spec);
+    if (!tg) tg = list.filter((p) => p.alive && !p.spec).sort((p, q) => q.a - p.a)[0];
+    const tx = tg ? tg.x : 0, ty = tg ? tg.y : 0;
+    if (!camF.init) { camF.x = tx; camF.y = ty; camF.init = true; } else { const kc = Math.min(1, dt * 7); camF.x += (tx - camF.x) * kc; camF.y += (ty - camF.y) * kc; }
+  }
+  if (shake > 0.2) shake *= Math.pow(0.001, dt); else shake = 0;
+  cam = Sc.makeCam(W, H, view, camF.x, camF.y, shake);
+  Sc.draw(ctx, cam, { lobby, md, ex: V.ex, phase: V.ph, el: V.el, objs: V.o, players: list, me: myId }, t, dt);
+  if (flash > 0) { ctx.fillStyle = `rgba(255,255,255,${flash})`; ctx.fillRect(0, 0, W, H); flash = Math.max(0, flash - dt * 1.6); }
+  if (mode !== 'menu' && joy.active) {
+    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(joy.bx, joy.by, 56, 0, TAU); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.arc(joy.kx, joy.ky, 26, 0, TAU); ctx.fill();
+  }
+}
+
+/* ================= HUD ================= */
+let hudT = 0, lobbySig = '', introSig = '', overSig = '', finalSig = '', dashSig = '';
+const MEDALS = ['🥇', '🥈', '🥉'];
+const SURV = [0, 4, 5, 6, 7, 8, 9, 11, 12, 15, 16, 17];
+function updateHud(now) {
+  if (!V) return;
+  if (now - hudT < 90) return; hudT = now;
+  const me = V.players.find((p) => p.id === myId);
+  const ph = V.ph, lobby = ph === 4, md = V.md, M = MODES[md];
+  const parts = V.players.filter((p) => !p.spec), aliveN = parts.filter((p) => p.alive).length;
+  $('alive').textContent = lobby ? '🧊 ' + T('lobbyTitle') : ph === 3 ? '' : T('roundN', Math.min(V.rd, V.rs), V.rs) + (cfg.chaos && mode === 'online' ? ' 🌪' : '');
+  if (mode === 'online') { const pv = $('pingv'); if (pv) pv.textContent = `· ${net.ping}ms`; }
+  // метка режима и таймер
+  const showMode = !lobby && ph !== 3;
+  let tag = '', tm = '', low = false;
+  if (showMode) {
+    tag = `${M.icon} ${MT(md).name}`;
+    if (md === 18 && V.ex.c) tag += ` · 🔴 ${V.ex.c[0]} : ${V.ex.c[1]} 🔵`;
+    if (ph === 1 && SURV.includes(md)) tag += ` · ${T('alive')} ${aliveN}/${parts.length}`;
+    if (md === 1 && me && !me.spec) tag += me.b ? ` · 🏁 ${me.b}` : ` · ${T('laps', Math.min(Sim.RACE.LAPS, Math.floor(me.a / 100) + 1))}`;
+    if (ph === 1) {
+      if (M.timed) { const s = Math.ceil(V.tm); tm = '⏱ ' + s; low = s <= 10; }
+      else if (md === 1 && V.ex.fl >= 0) { tm = '🏁 ' + Math.ceil(V.ex.fl); low = true; }
+      else if (md === 5 && V.ex.f != null) { tm = '💣 ' + Math.ceil(V.ex.f); low = V.ex.f < 3.5; }
+      else if (md === 12 && V.ex.hi === 1) { tm = '⏱ ' + Math.ceil(V.ex.t); low = V.ex.t < 1.5; }
+    }
+  }
+  if ($('modeTag').textContent !== tag) $('modeTag').textContent = tag;
+  $('modeTag').classList.toggle('hide', !tag);
+  const te = $('timer'); if (te.textContent !== tm) te.textContent = tm; te.classList.toggle('low', low);
+  // таблица очков
+  $('score').classList.toggle('hide', lobby || ph === 3);
+  if (!lobby && ph !== 3) {
+    const lrMap = new Map((V.lr || []).map((r) => [r[0], r[2]]));
+    const live = ph === 1 && !!M.live;
+    const liveTx = (p) => `${M.live}${p.a}${M.liveSuf || ''} · `;
+    const sorted = V.players.filter((p) => !p.spec || p.score).sort((a, b) => (live ? b.a - a.a : 0) || b.score - a.score).slice(0, 6);
+    $('score').innerHTML = sorted.map((p) => { const inf = infoOf(p.id); return `<div class="${p.id === myId ? 'me' : ''} ${!p.alive && ph === 1 && !p.spec ? 'dead' : ''}"><i style="background:${(Cos.SKIN_COL[inf.look.s] || Cos.color(inf.look.c))}"></i><span class="nm">${esc(inf.name)}</span><b>${live ? `<span style="font-size:12px;opacity:.9">${liveTx(p)}</span>` : ''}${p.score}${lrMap.has(p.id) ? ` <u style="text-decoration:none;color:#9be8b0;font-size:12px">+${lrMap.get(p.id)}</u>` : ''}</b></div>`; }).join('');
+  }
+  // кнопка действия
+  const dSig = (lobby ? -1 : md) + lang;
+  if (dSig !== dashSig) { dashSig = dSig; $('dashIc').textContent = lobby ? '⚡' : DASH_IC[md]; $('dashTx').textContent = lobby ? T('dash') : MT(md).btn; }
+  const cd = me ? me.cd : 0; $('dash').style.setProperty('--p', `${Math.round((1 - cd) * 100)}%`); $('dash').classList.toggle('cd', cd > 0.02);
+  $('dash').classList.toggle('hide', ph === 3);
+  $('emo').classList.toggle('hide', ph === 3);
+
+  // баннер
+  let txt = '', sub = '';
+  if (ph === 0) {
+    const n = Math.ceil(V.tm - 0.2); txt = n > 0 ? String(n) : T('go'); sub = `${M.icon} ${MT(md).name}`;
+    if (n !== lastCountNum && n > 0) { GA.play('tick'); lastCountNum = n; }
+  } else if (ph === 1) {
+    if (now < goFlash) txt = T('go');
+    else if (me && me.spec) sub = T('nextRound');
+    else if (md === 18 && me && !me.alive) sub = T('tankDead', (V.ex.D && V.ex.D[myId]) || 1);
+    else if (me && !me.alive && md !== 1) sub = T('fell') + ' · ' + T('watching');
+    else if (md === 5 && me && me.hot) sub = T('youHot');
+    else if (md === 9 && me && V.ex && V.ex.S && V.ex.S.includes(myId)) sub = T('youSnow');
+    else if (md === 18 && V.ex && V.ex.T && V.ex.T[myId] != null && (V.el < 7 || (V.ex.fl && (V.ex.fl[1 - V.ex.T[myId]][2] === myId || V.ex.fl[V.ex.T[myId]][2])))) { const t0 = V.ex.T[myId], hs = M[lang].hints; sub = (t0 ? '🔵 ' : '🔴 ') + (V.ex.fl[1 - t0][2] === myId ? hs[1] : V.ex.fl[t0][2] ? hs[2] : hs[0]); }
+    else if (M[lang] && M[lang].hints && V.ex && V.ex.hi != null && M[lang].hints[V.ex.hi]) sub = M[lang].hints[V.ex.hi];
+    else if (md === 3 && me && me.hot) sub = T('youCrown');
+    else if (md === 3 && V.el < 6) sub = T('kingHint');
+  }
+  const bn = $('banner'); const html = txt + (sub ? `<small>${sub}</small>` : '');
+  bn.classList.toggle('subonly', !txt);
+  if (bn.innerHTML !== html) bn.innerHTML = html;
+  $('windmsg').textContent = V.ex && V.ex.wd && V.ex.wd[1] === 1 ? T('windWarn') : '';
+  GA.setIntensity(ph === 1);
+  updateIntro(); updateOver(me); updateFinal(me); updateLobby();
+}
+
+function updateIntro() {
+  const box = $('intro');
+  if (V.ph !== 5) { box.classList.add('hide'); introSig = ''; return; }
+  const sig = V.rd + '|' + V.md + lang;
+  if (sig !== introSig) {
+    introSig = sig; const M = MODES[V.md];
+    box.innerHTML = `<div class="rd">${T('roundN', V.rd, V.rs)}</div><div class="ic">${M.icon}</div><h3>${esc(MT(V.md).name)}</h3><p>${esc(MT(V.md).goal)}</p>`;
+    box.style.animation = 'none'; void box.offsetWidth; box.style.animation = '';
+  }
+  box.classList.remove('hide');
+}
+
+function updateOver(me) {
+  const box = $('over');
+  if (V.ph !== 2 || !V.lr) { box.classList.add('hide'); overSig = ''; return; }
+  const last = V.rd >= V.rs;
+  const w = V.lr.find((r) => r[1] === 1);
+  const sig = V.rd + '|' + V.lr.map((r) => r[0] + ':' + r[2]).join() + lang + Math.ceil(V.tm);
+  if (sig !== overSig) {
+    overSig = sig;
+    const rows = V.lr.map((r) => {
+      const inf = infoOf(r[0]), pl = V.players.find((q) => q.id === r[0]);
+      return `<div class="r ${r[0] === myId ? 'me' : ''}"><span>${MEDALS[r[1] - 1] || r[1]}</span><i style="background:${(Cos.SKIN_COL[inf.look.s] || Cos.color(inf.look.c))}"></i><em><span class="nm">${esc(inf.name)}${r[0] === myId ? ' (' + T('youTag') + ')' : ''}</span>${inf.adm ? ADM : ''}</em><u>+${r[2]}</u><b>${pl ? pl.score : ''}</b></div>`;
+    }).join('');
+    const wn = w ? (w[0] === myId ? T('youWon') : '🏆 ' + esc(nameOf(w[0]))) : T('draw');
+    box.innerHTML = `<h2>${wn}</h2><div style="font-size:12px;opacity:.8;margin-bottom:4px">${MODES[V.md].icon} ${T('results')} · ${T('roundN', V.rd, V.rs)}</div>${rows}<p>${last ? '🏆 ' : T('nextIn') + ' '}${Math.max(1, Math.ceil(V.tm))}…</p>`;
+  }
+  box.classList.remove('hide');
+}
+
+function updateFinal(me) {
+  const box = $('final'), top = $('finalTop');
+  document.body.classList.toggle('fin', V.ph === 3);
+  if (V.ph !== 3) { box.classList.add('hide'); top.classList.add('hide'); finalSig = ''; return; }
+  const fi = finalInfo || { place: 0, n: V.fr ? V.fr.length : 0, first: V.fr && V.fr[0] };
+  const wn = fi.first ? esc(nameOf(fi.first)) : '';
+  top.innerHTML = `🏆 ${wn}<small>${fi.place ? T('yourPlace', fi.place) + (fi.place === fi.n && fi.n > 1 ? ' · ' + T('caged') : '') : ''}</small>`;
+  top.classList.remove('hide');
+  const sig = (mode === 'offline' ? 'o' : 'n') + lang + matchEarn;
+  if (sig !== finalSig) {
+    finalSig = sig;
+    box.innerHTML = (matchEarn ? `<div class="earn">${T('earned')}: +${matchEarn} 🪙</div>` : '') +
+      (mode === 'offline'
+        ? `<div class="rowb"><button class="btn go" data-a="again">${T('again')}</button><button class="btn sub" data-a="menu">${T('toMenu')}</button></div>`
+        : `<p>${T('newGameIn')} <span id="fnT"></span>…</p><div class="rowb"><button class="btn sub" data-a="menu">${T('leave')}</button></div>`);
+  }
+  const ft = $('fnT'); if (ft) ft.textContent = Math.max(1, Math.ceil(V.tm));
+  box.classList.remove('hide');
+}
+$('final').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-a]'); if (!b) return; GA.play('click');
+  if (b.dataset.a === 'menu') leaveToMenu();
+  else if (b.dataset.a === 'again' && game) {
+    finalShown = false; finalInfo = null; matchEarn = 0; Sc.clearParts(); game.again(); finalSig = '';
+  }
 });
-function drawBigMap() {
-  if (!mapOpen || !S || !S.world) return;
-  const g = bigCtx, N = bigCv.width, w = S.world, W = S.W, size = w.mapSize, k = N / size, P = (x) => (x + size / 2) * k;
-  g.clearRect(0, 0, N, N); g.imageSmoothingEnabled = true; g.drawImage(w.minimap, 0, 0, N, N);
-  // сетка и подписи
-  g.strokeStyle = 'rgba(255,255,255,.08)'; g.lineWidth = 1; for (let i = 1; i < 8; i++) { const v = i / 8 * N; g.beginPath(); g.moveTo(v, 0); g.lineTo(v, N); g.moveTo(0, v); g.lineTo(N, v); g.stroke(); }
-  const icon = (x, z, txt, sz) => { g.font = `${sz || 22}px system-ui, "Apple Color Emoji", "Segoe UI Emoji"`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, P(x), P(z)); };
-  const dot = (x, z, col, r) => { g.fillStyle = col; g.beginPath(); g.arc(P(x), P(z), r, 0, TWO_PI); g.fill(); g.strokeStyle = 'rgba(0,0,0,.6)'; g.lineWidth = 1.5; g.stroke(); };
-  if (!W.duel) {
-    g.strokeStyle = 'rgba(232,87,63,.8)'; g.lineWidth = 3; g.beginPath(); g.arc(P(0), P(0), CONFIG.ARENA_R * k, 0, TWO_PI); g.stroke();
-    icon(0, 0, '💀', 26); icon(W.nest.x, W.nest.z, '🥚', 24); icon(W.portalIn.x, W.portalIn.z, '🌀', 20);
-    if (W.features && W.features.caves) for (const c of W.features.caves) { g.strokeStyle = '#e8f4ff'; g.lineWidth = 5; g.lineCap = 'round'; g.beginPath(); g.moveTo(P(c.x - Math.cos(c.a) * c.L / 2), P(c.z - Math.sin(c.a) * c.L / 2)); g.lineTo(P(c.x + Math.cos(c.a) * c.L / 2), P(c.z + Math.sin(c.a) * c.L / 2)); g.stroke(); g.lineCap = 'butt'; icon(c.x, c.z - 14, '🕳', 16); }   // сквозные пещеры
-    if (S.pt && S.pt.next) icon(W.portalNext.x, W.portalNext.z, '✨', 22);
+
+/* ---------- комната ожидания ---------- */
+function summaryText() { return (cfg.kind === 2 ? T('sumPick', (cfg.picks || []).length, cfg.bots) : cfg.kind ? T('sumSeries', MT(cfg.mode).name, cfg.len, cfg.bots) : T('sumTour', cfg.len, cfg.bots)) + (cfg.bots ? ' · ' + DIFF_IC[cfg.diff == null ? 1 : cfg.diff] : ''); }
+function updateLobby() {
+  const box = $('lobby');
+  if (V.ph !== 4 || mode !== 'online') { box.classList.add('hide'); $('hud').classList.remove('inlobby'); if ($('hint').textContent === T('hintLobby')) $('hint').textContent = ''; return; }
+  box.classList.remove('hide'); $('hud').classList.add('inlobby');
+  const humans = [...roster.entries()].filter(([, r]) => !r.bot);
+  const isHost = hostId === myId;
+  const sig = [cfg.diff, roomCode, humans.map(([id, r]) => id + r.name + r.look.c + r.look.s).join(), isHost, cfg.kind, (cfg.picks || []).join(), cfg.len, cfg.mode, cfg.bots, cfg.chaos, roomPub, lang].join('|');
+  if (sig !== lobbySig) {
+    lobbySig = sig;
+    box.innerHTML =
+      `<div class="hd">🧊 <span class="code" data-a="share">${roomCode}</span> <button class="mini" data-a="share">📤 ${T('share')}</button></div>` +
+      `<div class="pl">${humans.map(([id, r]) => `<span><i style="background:${(Cos.SKIN_COL[r.look.s] || Cos.color(r.look.c))}"></i>${esc(r.name)}${id === hostId ? ' 👑' : ''}${id === myId ? ' ·' + T('youTag') : ''}</span>`).join('')}</div>` +
+      `<div class="sum">${summaryText()}${cfg.chaos ? ' · 🌪' : ''}</div>` +
+      (isHost && !roomPub ? `<div class="opts"><button class="cfgb" data-a="cfg">⚙️ ${T('roomSet')}</button></div>` : '') +
+      `<div class="st" id="lbSt"></div>` +
+      (isHost ? `<button class="btn go" id="lbStart" data-a="start">▶ ${T('start')}</button>` : '');
   }
-  const sr = Math.max(60, S.sense || 0);
-  for (const e of S.ents.values()) {
-    if (e.boss) continue; const p = e.group.position, d = Math.hypot(p.x - S.px, p.z - S.pz); if (d > sr || !e.arch) continue;
-    dot(p.x, p.z, (e.flags & 16) ? '#9be37a' : e.arch.role === 'hostile' ? '#ff5a4a' : e.arch.role === 'herd' ? '#ffd35a' : '#8cff7a', 3.2);
-  }
-  for (const p of S.players.values()) { const q = p.actor.group.position; friendMark(g, P(q.x), P(q.z), 11, p.info, p.info.bot, 0); }
-  // игрок
-  g.save(); g.translate(P(S.px), P(S.pz)); g.rotate(Math.PI - S.me.face); g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 3;
-  g.beginPath(); g.moveTo(0, -14); g.lineTo(9, 10); g.lineTo(0, 5); g.lineTo(-9, 10); g.closePath(); g.stroke(); g.fill(); g.restore();
-  $('bigmap-t').textContent = (S.biome === 'duel' ? T('duel') : TN(CONFIG.BIOME[S.biome].n)) + (W.ocean ? ' · ' + T('depth_m', { n: Math.max(0, Math.round(W.waterY - S.py)) }) : '');
+  let st;
+  const few = humans.length < 2 && !cfg.bots;
+  if (roomPub) st = V.tm > 0 ? T('lobbyAuto', Math.ceil(V.tm)) : (few ? T('wait2') : T('lobbyAutoWait'));
+  else st = few ? T('lobbyWait') : isHost ? T('lobbyReady') : T('lobbyWaitHost');
+  const el = $('lbSt'); if (el && el.textContent !== st) el.textContent = st;
+  const sb = $('lbStart'); if (sb) sb.disabled = few;
+  $('hint').textContent = T('hintLobby');
 }
-const CLS_ICO = Object.fromEntries(Object.keys(CONFIG.CLS_INFO).map(k => [k, CONFIG.CLS_INFO[k].ico]));
-let lastHud = 0, fpsAcc = 0, fpsN = 0, fpsShow = 60;
-function updateHud(now, dt) {
-  const mp = S.mp; if (!mp) return;
-  const pr = S.profile, st = S.stats, setW = (id, v) => { $(id).firstElementChild.style.width = clamp(v * 100, 0, 100) + '%'; };
-  const setT = (id, txt) => { const el = $(id).lastElementChild; if (el._t !== txt) { el._t = txt; el.textContent = txt; } };
-  setW('b-hp', mp.hp / mp.mh); setW('b-st', S.me.stam / CONFIG.STAM_MAX); setW('b-fd', mp.fd / CONFIG.FOOD_MAX);
-  const need = pr.level >= CONFIG.MAX_LEVEL ? 1 : CONFIG.xpForLevel(pr.level); setW('b-xp', pr.level >= CONFIG.MAX_LEVEL ? 1 : mp.xp / need);
-  const aq = CONFIG.isAqua(pr.cls); $('b-br').style.display = aq ? '' : 'none'; if (aq) { setW('b-br', mp.br / mp.bm); setT('b-br', `${T('breath')} ${Math.ceil(mp.br)}/${Math.round(mp.bm)}`); }
-  { const low = aq && mp.br <= 5; $('b-br').classList.toggle('low', !!low); if (low && S.alive && !(S.hz && now / 1000 - S.hz.t < 1.2)) { const hz = $('hz'); hz.className = 'big'; hz.style.display = 'block'; hz.textContent = '⚠ ' + T('breath_low'); S.lowBr = now; } }
-  setT('b-hp', `HP ${Math.ceil(mp.hp)}/${mp.mh > 0 ? mp.mh : Math.ceil(mp.hp)}`);
-  setT('b-st', `${T('stamina')} ${Math.round(S.me.stam)}/${CONFIG.STAM_MAX}`);
-  setT('b-fd', `${T('hunger')} ${Math.round(mp.fd)}/${CONFIG.FOOD_MAX}`);
-  setT('b-xp', pr.level >= CONFIG.MAX_LEVEL ? `${T('level_short')}${pr.level} MAX` : `XP ${Math.max(0, Math.floor(mp.xp))}/${need}`);
-  const stage = CONFIG.STAGES[CONFIG.stageIndex(pr.level)].id;
-  $('lvl-t').textContent = `${CLS_ICO[pr.cls]} ${pr.name} · ${T('level_short')}${pr.level} · ${T('stage_' + stage)}`; $('coins').textContent = '🪙 ' + pr.coins;
-  const deb = []; if (mp.dots) deb.push('☠'); if (mp.sh > 0) deb.push('🛡 ' + Math.ceil(mp.sh) + 'с'); if (mp.hid) deb.push('🌿'); if (S.me.stun > 0) deb.push('💫'); if (S.me.clm) deb.push('🌳'); if (mp.rg >= 2) deb.push('🔥');
-  if (S.sense) deb.push('👁'); $('debuf').textContent = deb.join(' ');
-  const hz = $('hz'); if (S.hz && now / 1000 - S.hz.t < 1.2) { hz.className = ''; hz.style.display = 'block'; hz.textContent = '⚠ ' + T('hz_' + S.hz.k); } else if (S.lowBr !== now) hz.style.display = 'none';
-  // ячейки способностей
-  if (S.abBtns) for (const a of S.abBtns) {
-    let frac = 0; if (a.slot === 'e') frac = mp.cd[1] / (a.cd || 1); else if (a.slot === 'q') frac = mp.cd[2] / (a.cd || 1); else if (a.slot === 'atk') frac = mp.cd[0] / (CONFIG.CLASSES[pr.cls].atkCd || 0.5);
-    a.el.style.height = clamp(frac, 0, 1) * 100 + '%';
-  }
-  // босс
-  const bb = $('bossbar'), bs = S.bs;
-  if (bs && bs.st !== 'idle') { bb.style.display = 'block'; const def = CONFIG.BOSSES[bs.k]; bb.querySelector('.nm').textContent = TN(def.n); bb.querySelector('.bar > div').style.width = clamp(bs.hp / bs.mh * 100, 0, 100) + '%'; bb.querySelector('.ph').textContent = '●'.repeat(bs.ph + 1) + '○'.repeat(Math.max(0, 2 - bs.ph)) + (bs.inv ? ' 🛡' : ''); } else bb.style.display = 'none';
-  // дуэль
-  const db = $('duelbar'), du = S.du;
-  if (du) {
-    db.style.display = 'block'; const opp = S.players.get(du.opp);
-    db.querySelector('.vs').textContent = T('duel_vs', { x: opp ? opp.info.nick : '?' }) + (du.tn ? ' · ' + T('tourney') : '');
-    db.querySelector('.tm').textContent = du.st === 'count' ? Math.ceil(du.l) : du.st === 'fight' ? Math.ceil(du.l) + ' с' : '';
-    if (du.st === 'count' && Math.ceil(du.l) !== S.lastCount) { S.lastCount = Math.ceil(du.l); Audio.sfx('count'); }
-  } else db.style.display = 'none';
-  // возрождение
-  if (!S.alive) { $('rs-t').textContent = mp.rt > 0 ? T('respawn_in', { n: Math.ceil(mp.rt) }) : T('you_died'); }
-  // подсказки у порталов
-  const ph = $('portalhint'), W = S.W; ph.style.display = 'none';
-  if (S.pt && !W.duel && S.alive) {
-    const dIn = Math.hypot(S.px - W.portalIn.x, S.pz - W.portalIn.z), dNx = Math.hypot(S.px - W.portalNext.x, S.pz - W.portalNext.z);
-    if (dIn < 22) { ph.style.display = 'block'; ph.textContent = pr.level >= S.pt.req ? (S.pt.cool > 0 ? T('boss_cool', { n: S.pt.cool }) : T('portal_hint')) : T('portal_boss', { n: S.pt.req }); ph.style.color = pr.level >= S.pt.req ? '#9be37a' : '#ffb066'; }
-    else if (S.pt.next && dNx < 22) { ph.style.display = 'block'; ph.textContent = T('portal_next'); ph.style.color = '#9be37a'; }
-  }
-  // сведения справа
-  const b = S.room.biome, bn = b === 'duel' ? T('duel') : TN(CONFIG.BIOME[b].n), mode = S.room.mode === 'code' ? T('mode_code', { c: S.room.code }) : S.room.mode === 'rush' ? 'Boss Rush' + (S.rush ? ' · ' + S.rush.w : '') : S.room.mode === 'duel' ? '' : S.o.online ? '' : T('mode_solo');
-  const day = S.tod > 0.22 && S.tod < 0.78 ? '☀' : '🌙';
-  $('info').innerHTML = `${bn}${mode ? ' · ' + mode : ''}<br>${day} · 👥 ${S.players.size + 1}${S.o.online ? ' · ' + (S.ping || '–') + ' мс' : ''} · ${fpsShow} fps`;
-  const vert = !!(S.me.fly || (CONFIG.isAqua(pr.cls) && S.me.y < S.W.waterY && S.W.isDeep(S.me.x, S.me.z)));
-  document.body.classList.toggle('vert', vert);
-  if (vert !== S.vertLbl) { S.vertLbl = vert; $('tb-jump').textContent = T(vert ? 'b_up' : 'b_jump'); }
+$('lobby').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-a]'); if (!b || b.disabled) return;
+  const a = b.dataset.a; GA.play('click');
+  if (a === 'share') shareRoom();
+  else if (a === 'start') wsSend({ t: 'start' });
+  else if (a === 'cfg') openCfg();
+});
+
+/* ---------- сложность ботов ---------- */
+const DIFF_IC = ['🟢', '🟡', '🔴'];
+function diffChips(sel) { return [0, 1, 2].map((i) => `<button class="chip ${sel === i ? 'on' : ''}" data-d="${i}">${DIFF_IC[i]} ${T('diffs')[i]}</button>`).join(''); }
+function renderDiff() { for (const id of ['tDiff', 'mDiff', 'menuDiff']) { const el = $(id); if (el) el.innerHTML = diffChips(diffSel); } ls.set('diff', diffSel); }
+function onDiffClick(e) { const b = e.target.closest('[data-d]'); if (!b) return; diffSel = +b.dataset.d; GA.play('click'); renderDiff(); }
+for (const id of ['tDiff', 'mDiff', 'menuDiff']) $(id).addEventListener('click', onDiffClick);
+
+/* ---------- настройки комнаты (хозяин) ---------- */
+function validLen(kind, len) { if (kind === 2) return len; const ok = kind ? [1, 3, 5] : [3, 5, 7]; return ok.includes(len) ? len : 3; }
+function openCfg() { cfgWorking = Object.assign({}, cfg); renderCfg(); $('cfgSheet').classList.remove('hide'); }
+function pushCfg() { if (cfgWorking.kind === 2) cfgWorking.len = (cfgWorking.picks || []).length || 2; else cfgWorking.len = validLen(cfgWorking.kind, cfgWorking.len); wsSend({ t: 'cfg', kind: cfgWorking.kind, picks: cfgWorking.picks || [], len: cfgWorking.len, mode: cfgWorking.mode, bots: cfgWorking.bots, chaos: cfgWorking.chaos, diff: cfgWorking.diff }); renderCfg(); }
+function renderCfg() {
+  const c = cfgWorking;
+  $('cfK0').textContent = T('tRand'); $('cfK2').textContent = T('tPick'); $('cfK1').textContent = T('fSeries');
+  $('cfK0').classList.toggle('on', !c.kind); $('cfK2').classList.toggle('on', c.kind === 2); $('cfK1').classList.toggle('on', c.kind === 1);
+  $('cfModeBox').classList.toggle('hide', c.kind !== 1); $('cfPickBox').classList.toggle('hide', c.kind !== 2);
+  c.picks = c.picks || []; $('cfPicks').innerHTML = pickHtml(c.picks); $('cfPickInfo').textContent = c.picks.length >= 2 ? T('pickSel', c.picks.length) : T('pickHint');
+  $('cfLen').classList.toggle('hide', c.kind === 2); $('cfLenLbl').classList.toggle('hide', c.kind === 2);
+  $('cfModes').innerHTML = MODES.map((m) => `<button ${tankOff(m) ? 'disabled style="opacity:.3"' : ''} class="chip ${c.mode === m.id ? 'on' : ''}" data-m="${m.id}" title="${esc(m[lang].name)}">${m.icon}</button>`).join('');
+  $('cfLenLbl').textContent = c.kind ? T('rounds') : T('tourLen');
+  $('cfLen').innerHTML = (c.kind ? [1, 3, 5] : [3, 5, 7]).map((n) => `<button class="chip ${c.len === n ? 'on' : ''}" data-l="${n}">${n}</button>`).join('');
+  $('cfDiff').innerHTML = diffChips(c.diff == null ? 1 : c.diff);
+  $('cfBots').textContent = T('botsL') + ': ' + (c.bots ? 'ON' : 'OFF'); $('cfBots').classList.toggle('on', !!c.bots);
+  $('cfChaos').textContent = T('chaosL') + ': ' + (c.chaos ? 'ON' : 'OFF'); $('cfChaos').classList.toggle('on', !!c.chaos);
+}
+$('cfK0').onclick = () => { cfgWorking.kind = 0; pushCfg(); GA.play('click'); };
+$('cfK2').onclick = () => { cfgWorking.kind = 2; pushCfg(); GA.play('click'); };
+$('cfPicks').onclick = (e) => { const b = e.target.closest('[data-p]'); if (!b) return; cfgWorking.picks = togglePick(cfgWorking.picks || [], +b.dataset.p); pushCfg(); GA.play('click'); };
+$('cfK1').onclick = () => { cfgWorking.kind = 1; pushCfg(); GA.play('click'); };
+$('cfModes').onclick = (e) => { const b = e.target.closest('[data-m]'); if (!b) return; cfgWorking.mode = +b.dataset.m; pushCfg(); GA.play('click'); };
+$('cfLen').onclick = (e) => { const b = e.target.closest('[data-l]'); if (!b) return; cfgWorking.len = +b.dataset.l; pushCfg(); GA.play('click'); };
+$('cfDiff').onclick = (e) => { const b = e.target.closest('[data-d]'); if (!b) return; cfgWorking.diff = +b.dataset.d; pushCfg(); GA.play('click'); };
+$('cfBots').onclick = () => { cfgWorking.bots = cfgWorking.bots ? 0 : 1; pushCfg(); GA.play('click'); };
+$('cfChaos').onclick = () => { cfgWorking.chaos = cfgWorking.chaos ? 0 : 1; pushCfg(); GA.play('click'); };
+$('cfOk').onclick = () => { $('cfgSheet').classList.add('hide'); GA.play('click'); };
+/* ================= главный цикл ================= */
+const prevCtx = { a: $('prev').getContext('2d'), w: $('wprev').getContext('2d') };
+function drawPreview(cvEl, c2, now) {
+  const w = cvEl.width; c2.setTransform(1, 0, 0, 1, 0, 0); c2.clearRect(0, 0, w, w);
+  Sc.drawStage(c2, w, w, P.look, now, { u: w * 0.29 });
 }
 
-// ---------------------------------------------------------------- автокачество
-let aqT = 0, aqN = 0, aqLow = 0, aqHigh = 0, aqDowngraded = false;
-const RES_MIN = 0.55;
-function autoQuality(dt) {
-  aqT += dt; aqN++;
-  if (aqT < 1.5) return;
-  const fps = aqN / aqT; aqT = 0; aqN = 0; fpsShow = Math.round(fps);
-  if (qualityPref !== 'auto') return;
-  const target = IS_TOUCH ? CONFIG.TARGET_FPS_MOBILE : CONFIG.TARGET_FPS_DESKTOP, order = ['low', 'med', 'high'], i = order.indexOf(qualityName);
-  if (fps < target * 0.85) {
-    aqLow++; aqHigh = 0;
-    if (aqLow >= 2) {
-      aqLow = 0;
-      // сначала плавно снижаем разрешение картинки, и только когда оно уже минимальное — переходим на более низкое качество
-      if (resScale > RES_MIN + 0.01) { resScale = Math.max(RES_MIN, resScale - (fps < target * 0.6 ? 0.2 : 0.1)); applyRenderQuality(); }
-      else if (i > 0) { qualityName = order[i - 1]; resScale = 0.8; aqDowngraded = true; applyRenderQuality(); }
+let offPrev = null, offCur = null, offGame = null;
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (!lastT) lastT = now;
+  const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+  if (paused) return;
+
+  if (mode === 'offline' && game) {
+    acc += dt;
+    let stepped = 0;
+    while (acc >= 1 / 60) {
+      const iv = getInputVec(); game.setInput(myId, iv.x, iv.y, dashQueued); dashQueued = false;
+      game.step(1 / 60); acc -= 1 / 60; stepped++;
     }
-  } else if (fps > target * 0.97) {
-    aqHigh++; aqLow = 0;
-    if (aqHigh >= 4 && resScale < 1) { resScale = Math.min(1, resScale + 0.05); aqHigh = 0; applyRenderQuality(); }   // запас по FPS — возвращаем резкость
-    else if (aqHigh >= 6 && resScale >= 1 && !aqDowngraded && i < 2) { qualityName = order[i + 1]; aqHigh = 0; applyRenderQuality(); }
-  } else { aqLow = 0; aqHigh = 0; }
-}
-
-// ---------------------------------------------------------------- главный цикл
-let last = performance.now(), clock = 0;
-const _errSeen = new Set();
-function safe(fn, a, b, c) { try { fn(a, b, c); } catch (e) { const k = fn.name + ':' + e.message; if (!_errSeen.has(k)) { _errSeen.add(k); console.error(k, e); } } }
-function frame(nowMs) {
-  requestAnimationFrame(frame);
-  const rawDt = (nowMs - last) / 1000, dt = Math.min(0.05, rawDt); last = nowMs; clock += dt;
-  autoQuality(Math.min(1, rawDt));   // реальное время кадра (не обрезанное), чтобы FPS считался честно
-  if (!S || !S.welcomed) { updateMenu3d(dt); renderer.render(menu3d.scene, camera); return; }
-  const now = nowMs / 1000;
-  S.acc = (S.acc || 0) + dt;
-  let n = 0; while (S.acc >= DT && n < 5) { S.acc -= DT; n++; fixedStep(); } if (n === 5) S.acc = 0;
-  // каждый блок защищён: ошибка в одном (например, у редкого объекта) не должна останавливать всю игру
-  safe(updateActors, dt, clock, now);
-  safe(updateEnts, dt, clock, now);
-  safe(updateFx, dt);
-  if (S.hatch) updateHatch(dt);
-  const hc = S.hatch ? hatchCamera(dt) : false;
-  if (hc !== true) {
-    placeCamera(dt, S.px, S.py, S.pz, now);
-    if (hc && hc.pos) { const e = S.hatch.blend * S.hatch.blend * (3 - 2 * S.hatch.blend); _cp.copy(camera.position); _cq.copy(camera.quaternion); camera.position.lerpVectors(hc.pos, _cp, e); camera.quaternion.slerpQuaternions(hc.q, _cq, e); }
+    const r = game.takeRoster(); if (r) onRoster(r);
+    // шаг симуляции фиксирован (60 Гц), а экран может быть 120/144 Гц — интерполируем между двумя последними шагами, иначе картинка дёргается
+    if (stepped || !offCur || offGame !== game) {
+      const m = parseSnap(game.snapshot()); m.at = now; lastMap = m.map; curMd = m.md; handleEvents(m.e);
+      offPrev = (offGame === game && offCur && stepped === 1) ? offCur : m; offCur = m; offGame = game;
+    }
+    V = makeView(offCur, offPrev, offCur, Math.min(1, acc * 60), 0);
+  } else if (mode === 'online') {
+    V = buildOnline(now, dt);
+  } else V = null;
+  render(now, dt);
+  if (mode !== 'menu') updateHud(now);
+  else {
+    if (!$('menu').classList.contains('hide')) drawPreview($('prev'), prevCtx.a, now);
+    if (!$('wardrobe').classList.contains('hide')) drawPreview($('wprev'), prevCtx.w, now);
+    if (!$('clicker').classList.contains('hide')) Clicker.frame(now, dt);
   }
-  flushTramplers();
-  S.world.update(camera.position, { x: S.px, y: S.py, z: S.pz }, clock, dt, S.tod, S.wx);
-  if (S.foodMeshes) for (const f of S.foodMeshes) { f.rotation.y += dt * 1.2; const fx = f.userData.fx; if (fx) { const q = Math.sin(clock * 3 + f.position.x), r = 1 + 0.18 * q; if (!fx.rg) { fx.glow.material.opacity = 0.3 + 0.15 * q; continue; } fx.rg.scale.set(r, r, 1); fx.glow.material.opacity = 0.45 + 0.2 * q; fx.spark.position.y = 1.5 + 0.2 * Math.sin(clock * 2.2 + f.position.z); fx.spark.material.opacity = 0.6 + 0.3 * q; } }
-  if (now - lastHud > 0.1) { lastHud = now; updateHud(nowMs, dt); drawMinimap(); drawBigMap(); }
-  renderer.render(scene, camera);
 }
 
-// ---------------------------------------------------------------- связка с интерфейсом
-const ctl = {
-  start: startSession,
-  // смена динозавра без выхода в главное меню: тот же мир/комната/код, другой тип (у каждого свой прогресс)
-  switchType(cls) {
-    if (!S || !S.welcomed) return; const o = S.o, biome = S.room.biome === 'duel' ? S.profile.biome : S.room.biome;
-    startSession(Object.assign({}, o, { cls, biome, hatch: false }));
-  },
-  leave() { endSession(false); UI.showMenu(); },
-  send(o) { if (S && S.conn) S.conn.send(o); },
-  get session() { return S; },
-  activeProfile, menuSetDino, menuShowEgg, menuHatch, fade, pendingHatch: null,
-  setPanelOpen(v) { panelOpen = v; if (S && S.conn && !S.o.online) S.conn.paused = !!v;   // одиночная игра на паузе, пока открыто меню
-    if (document.pointerLockElement) { if (v) document.exitPointerLock(); } resetInput(); },
-  relock() { if (!IS_TOUCH && S && S.welcomed) { try { canvas.requestPointerLock(); } catch (e) { /* ignore */ } } },
-  setQuality(q) { qualityPref = q; try { localStorage.setItem('dino_q', q); } catch (e) { /* ignore */ } if (q !== 'auto') qualityName = q; else { qualityName = IS_TOUCH ? 'med' : 'high'; aqDowngraded = false; } applyRenderQuality(); },
-  getQuality: () => qualityPref,
-  setSens(v) { sens = v; try { localStorage.setItem('dino_sens', String(v)); } catch (e) { /* ignore */ } }, getSens: () => sens,
-  audio: Audio, IS_TOUCH, isTouch: IS_TOUCH,
-  rebuildHud() { if (S && S.welcomed) { buildAbilityBar(); } }
-};
-$('menubtn').addEventListener('click', () => { Audio.init(); UI.openPause(); });
-$('menubtn').addEventListener('touchstart', e => { e.stopPropagation(); }, { passive: true });
+/* ================= профиль, турнир, режимы ================= */
+function refreshProfileUI() {
+  $('lvlTxt').textContent = `${T('level')} ${Pro.level()}`;
+  $('lvlFill').style.width = Math.round(Pro.levelProgress() * 100) + '%';
+  const c67 = `<span class="c67">67</span>${P.c67 || 0}`;
+  $('coinsTxt').innerHTML = `🪙 ${P.coins} <span class="c67sep">·</span> ${c67}`;
+  $('coins').innerHTML = `🪙 ${P.coins} <span class="c67sep">·</span> ${c67}`;
+}
+const modesWord = (n) => (lang === 'ru' ? (n === 1 ? 'режим' : n < 5 ? 'режима' : 'режимов') : 'modes');
 
-(async function boot() {
-  applyRenderQuality();
-  scene = menu3d.scene;
+function renderTour() {
+  const pk = tourSel.kind === 2;
+  $('tType').innerHTML = `<button class="chip ${!pk ? 'on' : ''}" data-k="0">${T('tRand')}</button><button class="chip ${pk ? 'on' : ''}" data-k="2">${T('tPick')}</button>`;
+  $('tLen').classList.toggle('hide', pk); $('tLenLbl').classList.toggle('hide', pk); $('tPickBox').classList.toggle('hide', !pk);
+  $('tPick').innerHTML = pickHtml(tourSel.picks); $('tPickInfo').textContent = tourSel.picks.length >= 2 ? T('pickSel', tourSel.picks.length) : T('pickHint');
+  for (const id of ['bTOff', 'bTOn', 'bTFr']) $(id).disabled = pk && tourSel.picks.length < 2;
+  $('tLen').innerHTML = [3, 5, 7].map((n) => `<button class="chip ${tourSel.len === n ? 'on' : ''}" data-l="${n}">${n} ${modesWord(n)}</button>`).join('');
+  $('tBotsOn').textContent = T('botsOn'); $('tBotsOff').textContent = T('botsOff');
+  $('tBotsOn').classList.toggle('on', !!tourSel.bots); $('tBotsOff').classList.toggle('on', !tourSel.bots);
+  $('tInfo').textContent = tourSel.bots ? T('tInfoOn') : T('tInfoOff');
+  const sp = (a) => `<span>${a}</span>`;
+  $('tPts').innerHTML = tourSel.bots
+    ? ['🥇 4', '🥈 3', '🥉 2', '4 → 1', '5 → 0'].map(sp).join('')
+    : [5, 4, 3, 2].map((n) => sp(`${n}: ` + Array.from({ length: n }, (_, i) => n - 1 - i).join('·'))).join('');
+  ls.set('tour', tourSel);
+}
+$('tLen').onclick = (e) => { const b = e.target.closest('[data-l]'); if (!b) return; tourSel.len = +b.dataset.l; GA.play('click'); renderTour(); };
+$('tType').onclick = (e) => { const b = e.target.closest('[data-k]'); if (!b) return; tourSel.kind = +b.dataset.k; GA.play('click'); renderTour(); };
+$('tPick').onclick = (e) => { const b = e.target.closest('[data-p]'); if (!b) return; togglePick(tourSel.picks, +b.dataset.p); GA.play('click'); renderTour(); };
+$('tBotsOn').onclick = () => { tourSel.bots = 1; GA.play('click'); renderTour(); };
+$('tBotsOff').onclick = () => { tourSel.bots = 0; GA.play('click'); renderTour(); };
+$('bTOff').onclick = () => { commitName(); GA.play('click'); startOffline(tourCfg()); };
+$('bTOn').onclick = () => { commitName(); GA.play('click'); connect('quick', null, Object.assign({ bots: tourSel.bots }, tourCfg())); };
+$('bTFr').onclick = () => { commitName(); GA.play('click'); connect('create', null, { cfg: Object.assign({ bots: tourSel.bots, diff: diffSel }, tourCfg()) }); };
+$('bTBack').onclick = () => { GA.play('click'); showScreen('menu'); };
+
+function renderModes() {
+  $('modeGrid').innerHTML = MODES.map((m) => `<button class="mcard ${modeSel.mode === m.id ? 'on' : ''}" data-m="${m.id}"><b>${m.icon}</b>${esc(m[lang].name)}</button>`).join('');
+  $('modeInfo').textContent = MT(modeSel.mode).goal;
+  $('mLen').innerHTML = [1, 3, 5].map((n) => `<button class="chip ${modeSel.len === n ? 'on' : ''}" data-l="${n}">${n}</button>`).join('');
+  ls.set('modesel', modeSel);
+}
+$('modeGrid').onclick = (e) => { const b = e.target.closest('[data-m]'); if (!b) return; modeSel.mode = +b.dataset.m; GA.play('click'); renderModes(); };
+$('mLen').onclick = (e) => { const b = e.target.closest('[data-l]'); if (!b) return; modeSel.len = +b.dataset.l; GA.play('click'); renderModes(); };
+$('bMOff').onclick = () => { commitName(); GA.play('click'); startOffline({ kind: 1, len: modeSel.len, mode: modeSel.mode }); };
+$('bMOn').onclick = () => { commitName(); GA.play('click'); connect('quick', null, { kind: 1, len: modeSel.len, gm: modeSel.mode, bots: 1, diff: diffSel }); };
+$('bMFr').onclick = () => { commitName(); GA.play('click'); connect('create', null, { cfg: { kind: 1, len: modeSel.len, mode: modeSel.mode, bots: 0, diff: diffSel } }); };
+$('bMBack').onclick = () => { GA.play('click'); showScreen('menu'); };
+
+/* ================= гардероб и награды ================= */
+let wTab = 'c';
+function buildWardrobe() {
+  refreshProfileUI();
+  const tabs = $('tabs'); tabs.innerHTML = ''; $('wNote').textContent = '';
+  for (const s of ['c', 'p', 'h', 'e', 't', 's', 'k']) { const b = document.createElement('button'); b.textContent = T('tab' + s); b.className = s === wTab ? 'sel' : ''; b.onclick = () => { wTab = s; GA.play('click'); buildWardrobe(); }; tabs.appendChild(b); }
+  const grid = $('grid'); grid.innerHTML = '';
+  const n = Cos.count(wTab);
+  // по возрастанию цены; недоступные (код/кликер) — после обычных; новые предметы за монеты 67 — в самом конце
+  const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => {
+    const grp = (i) => (Cos.cur(wTab, i) === 'c67' ? 2 : Cos.price(wTab, i) < 0 ? 1 : 0);
+    return grp(a) - grp(b) || Cos.price(wTab, a) - Cos.price(wTab, b) || a - b;
+  });
+  for (const i of order) {
+    const d = document.createElement('div'); const own = Pro.owned(wTab, i), sel = P.look[wTab] === i, lk = Cos.lock(wTab, i);
+    d.className = 'item' + (sel ? ' sel' : '') + (own ? '' : ' lock');
+    d.appendChild(Cos.thumb(wTab, i, P.look, 56, lang));
+    const l = document.createElement('span'); l.textContent = Cos.name(wTab, i, lang); d.appendChild(l);
+    if (own) { const pr = document.createElement('span'); pr.className = 'pr'; pr.textContent = sel ? '✓' : ''; d.appendChild(pr); }
+    else if (lk) { const k = document.createElement('span'); k.className = 'lk'; k.textContent = lk === 'clicker' ? T('lkClicker') : T('lkCode'); d.appendChild(k); }
+    else { const pr = document.createElement('span'); pr.className = 'pr'; if (Cos.cur(wTab, i) === 'c67') pr.innerHTML = `<span class="c67">67</span>${Cos.price(wTab, i)}`; else pr.textContent = `🪙 ${Cos.price(wTab, i)}`; d.appendChild(pr); }
+    d.onclick = () => {
+      if (own) { Pro.equip(wTab, i); GA.play('click'); buildWardrobe(); return; }
+      if (lk) { const note = lk === 'clicker' ? T('lockClicker') : T('lockCode'); $('wNote').textContent = note; toast(note); d.classList.remove('shake'); void d.offsetWidth; d.classList.add('shake'); GA.play('click'); return; }
+      if (Pro.buy(wTab, i)) { Pro.equip(wTab, i); GA.play('buy'); toast('✅ ' + T('bought')); buildWardrobe(); }
+      else { d.classList.remove('shake'); void d.offsetWidth; d.classList.add('shake'); toast(T('notEnough')); }
+    };
+    grid.appendChild(d);
+  }
+}
+$('bPromo').onclick = async () => {
+  GA.init(); const code = $('promo').value; if (!code.trim()) return;
+  const r = await Pro.redeem(code);
+  if (!r.ok) { toast('❌ ' + (r.net ? T('codeNet') : r.wait ? T('codeWait') : T('badCode'))); GA.play('click'); return; }
+  GA.play('ach'); $('promo').value = '';
+  if (r.coins) { toast(r.had ? T('codeHad') : T('codeCoins', r.coins)); refreshProfileUI(); return; }
+  if (r.c67) { toast(r.had ? T('codeHad') : T('codeC67', r.c67)); refreshProfileUI(); return; }
+  toast(r.had ? T('codeHad') : T('codeOk', Cos.name(r.slot, r.idx, lang)));
+  wTab = r.slot; buildWardrobe();
+};
+$('promo').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('bPromo').click(); });
+
+function buildAchs() {
+  $('achList').innerHTML = Pro.ACH.map((a) => {
+    const v = Math.min(a.v(), a.goal), done = !!P.ach[a.id];
+    return `<div class="ach ${done ? 'done' : ''}"><div class="ic">${done ? '🏆' : '🔒'}</div><div class="tx"><b>${lang === 'ru' ? a.ru : a.en}</b><br>${lang === 'ru' ? a.dru : a.den}<div class="bar"><i style="width:${Math.round((v / a.goal) * 100)}%"></i></div></div><div class="rw">${done ? '✓' : v + '/' + a.goal}<br>+${a.rew}🪙</div></div>`;
+  }).join('');
+}
+function syncToggles() {
+  for (const [id, k] of [['tSfx', 'sound'], ['tMusic', 'music'], ['tVibe', 'vibe']]) { $(id).textContent = P.opts[k] ? 'ON' : 'OFF'; $(id).classList.toggle('on', !!P.opts[k]); }
+  $('bS2').textContent = P.opts.sound ? '🔊' : '🔇';
+  GA.setSfx(P.opts.sound); GA.setMusic(P.opts.music);
+}
+function hardReload() {
+  toast(T('updating'));
+  const done = () => location.reload();
   try {
-    await Profile.restore();
-    UI.init(ctl);
-    UI.applyLang();
-    UI.showMenu();
-    Audio.setScene('menu');
-  } catch (e) { console.error(e); const el = $('loaderr'); if (el) el.textContent = 'Ошибка запуска: ' + e.message; return; }
-  $('loading').style.display = 'none';
+    const p = [];
+    if ('serviceWorker' in navigator) p.push(navigator.serviceWorker.getRegistrations().then((rs) => Promise.all(rs.map((r) => r.unregister()))));
+    if (window.caches) p.push(caches.keys().then((ks) => Promise.all(ks.map((k) => caches.delete(k)))));
+    Promise.all(p).then(done, done); setTimeout(done, 2500);
+  } catch (e) { done(); }
+}
+
+function commitName() { const v = $('name').value.replace(/[<>&"'`]/g, '').trim().slice(0, 14); P.name = v; Pro.save(); }
+
+function initMenu() {
+  applyLang(); syncToggles(); refreshProfileUI();
+  Clicker.init({ lang: () => lang, toast, refresh: refreshProfileUI, wardrobe: () => { buildWardrobe(); showScreen('wardrobe'); } });
+  if (!P.name && Y.player) { try { const n = Y.player.getName(); if (n) { P.name = n.slice(0, 14); Pro.save(); } } catch (e) {} }
+  $('name').value = P.name;
+  $('name').addEventListener('input', commitName); $('name').addEventListener('change', commitName);
+  $('bOnline').onclick = () => { commitName(); GA.init(); GA.play('click'); connect('quick', null, { kind: 0, len: 3, bots: 1, diff: diffSel }); };
+  $('bTour').onclick = () => { GA.init(); GA.play('click'); renderTour(); showScreen('tourney'); };
+  $('bModes').onclick = () => { GA.init(); GA.play('click'); renderModes(); showScreen('modes'); };
+  $('bFriends').onclick = () => { GA.init(); GA.play('click'); $('friends').classList.toggle('hide'); };
+  $('bCreate').onclick = () => { commitName(); GA.play('click'); connect('create', null, { cfg: { kind: 0, len: 3, bots: 0, diff: diffSel } }); };
+  $('bJoin').onclick = () => { commitName(); GA.play('click'); const c = $('code').value.trim().toUpperCase(); if (c.length !== 4) return showMsg(T('enterCode')); connect('code', c); };
+  $('code').addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, ''); });
+  $('bOffline').onclick = () => { commitName(); GA.init(); GA.play('click'); startOffline({ kind: 0, len: 3 }); };
+  $('bClk').onclick = () => { GA.init(); GA.play('click'); showScreen('clicker'); };
+  $('bWard').onclick = () => { GA.init(); GA.play('click'); buildWardrobe(); showScreen('wardrobe'); };
+  $('bWBack').onclick = () => { GA.play('click'); showScreen('menu'); };
+  $('bCkBack').onclick = () => { GA.play('click'); Profile.save(); showScreen('menu'); refreshProfileUI(); };
+  $('bAch').onclick = () => { GA.init(); GA.play('click'); buildAchs(); showScreen('achs'); };
+  $('bABack').onclick = () => { GA.play('click'); showScreen('menu'); };
+  $('bSet').onclick = () => { GA.init(); GA.play('click'); syncToggles(); showScreen('settings'); };
+  // ---- аккаунт ----
+  let accReset = false;
+  const accE = (e) => (T('accE')[e] || T('accE').err);
+  function renderAcc() {
+    const on = !!Pro.Acc.token;
+    renderMenuAcc();
+    $('accIn').classList.toggle('hide', !on); $('accOut').classList.toggle('hide', on);
+    $('accName').textContent = Pro.Acc.name; $('accRecBox').classList.toggle('hide', !accReset);
+    $('bAccLogin').textContent = accReset ? T('accReset') : T('accLogin'); $('bAccReg').classList.toggle('hide', accReset);
+    $('accState').textContent = (T('accSt')[Pro.Acc.state] || '');
+  }
+  Pro.Acc.onChange = (s) => { renderAcc(); if (s === 'rejected' || s === 'conflict') { toast(T('accSt')[s]); refreshProfileUI(); } if (s === 'expired') toast(T('accSt').expired); };
+  Pro.checkAcc(); renderMenuAcc();
+  // ---- меню: ник аккаунта и Admin ----
+  function renderMenuAcc() {
+    const el = $('menuAcc'); if (!el) return;
+    const on = !!Pro.Acc.token;
+    el.classList.toggle('hide', !on);
+    el.innerHTML = on ? `<span>👤 ${esc(Pro.Acc.name)}</span>${tagHtml(Pro.Acc.tag || (Pro.Acc.admin ? 'admin' : ''))}` : '';
+  }
+  window.renderMenuAcc = renderMenuAcc;
+  // ---- таблица лидеров ----
+  let lbTab = 'wins', lbData = null;
+  async function loadTop() {
+    $('lbList').innerHTML = `<div class="lbempty">${T('lbLoad')}</div>`;
+    try { const r = await fetch(Pro.apiBase() + '/api/top', { cache: 'no-store' }); const j = await r.json(); lbData = j.ok ? j : null; } catch (e) { lbData = null; }
+    drawTop();
+  }
+  function drawTop() {
+    $('tbWins').classList.toggle('on', lbTab === 'wins'); $('tbCoins').classList.toggle('on', lbTab === 'coins');
+    if (!lbData) { $('lbList').innerHTML = `<div class="lbempty">${T('accE').net}</div>`; return; }
+    const rows = lbData[lbTab] || [], mine = (Pro.Acc.name || '').toLowerCase();
+    if (!rows.length) { $('lbList').innerHTML = `<div class="lbempty">${T('lbEmpty')}</div>`; return; }
+    $('lbList').innerHTML = rows.map((r, i) => `<div class="lbr ${mine && r.n.toLowerCase() === mine ? 'me' : ''} ${i === 0 ? 't1' : ''}"><span class="rk">${MEDALS[i] || i + 1}</span><span class="nm">${esc(r.n)}</span>${tagHtml(r.g || (r.a ? 'admin' : ''))}<b>${lbTab === 'coins' ? '🪙 ' : ''}${r.v}${lbTab === 'wins' ? ' ' + T('lbWinsU') : ''}</b></div>`).join('');
+  }
+  $('bTop').onclick = () => { GA.init(); GA.play('click'); lbTab = 'wins'; showScreen('toplist'); loadTop(); };
+  $('tbWins').onclick = () => { GA.play('click'); lbTab = 'wins'; drawTop(); };
+  $('tbCoins').onclick = () => { GA.play('click'); lbTab = 'coins'; drawTop(); };
+  $('bTopBack').onclick = () => { GA.play('click'); showScreen('menu'); };
+  $('bAcc').onclick = () => { Pro.checkAcc(); GA.init(); GA.play('click'); accReset = false; $('accMsg').textContent = ''; renderAcc(); showScreen('account'); };
+  $('bAccBack').onclick = () => { GA.play('click'); showScreen('settings'); };
+  $('bAccForgot').onclick = () => { accReset = !accReset; GA.play('click'); renderAcc(); };
+  async function accGo(kind) {
+    const name = $('accUser').value.trim(), pass = $('accPass').value; $('accMsg').textContent = '…';
+    const r = kind === 'reg' ? await Pro.register(name, pass) : accReset ? await Pro.resetPass(name, $('accRec').value, pass) : await Pro.login(name, pass);
+    if (!r.ok) { $('accMsg').textContent = '❌ ' + accE(r.e); GA.play('click'); return; }
+    $('accPass').value = ''; $('accMsg').textContent = ''; accReset = false; GA.play('ach'); renderAcc(); refreshProfileUI(); try { buildWardrobe(); } catch (e) {}
+    $('promo') && ($('promo').value = '');
+    toast(T('accDone', Pro.Acc.name));
+    if (r.recovery) $('accMsg').textContent = '🔑 ' + T('accRecShow', r.recovery);
+  }
+  $('bAccLogin').onclick = () => accGo('login'); $('bAccReg').onclick = () => accGo('reg');
+  $('bAccOut').onclick = async () => { GA.play('click'); try { await Pro.syncNow(); } catch (e) {} await Pro.logout(); accReset = false; $('accMsg').textContent = ''; renderAcc(); };
+  $('accPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') accGo('login'); });
+  $('bSBack').onclick = () => { GA.play('click'); showScreen('menu'); };
+  for (const [id, k] of [['tSfx', 'sound'], ['tMusic', 'music'], ['tVibe', 'vibe']]) $(id).onclick = () => { P.opts[k] = !P.opts[k]; Pro.save(); syncToggles(); GA.play('click'); };
+  $('bS2').onclick = () => { GA.init(); P.opts.sound = !P.opts.sound; Pro.save(); syncToggles(); };
+  $('bLang').onclick = () => { lang = lang === 'ru' ? 'en' : 'ru'; ls.set('lang', lang); applyLang(); refreshProfileUI(); fetchOnline(); };
+  $('bUpdate').onclick = hardReload;
+  $('ver').textContent = $('ver2').textContent = 'v' + C.VERSION;
+  fetchOnline(); setInterval(() => { if (mode === 'menu' && !document.hidden) fetchOnline(); }, 15000);
+
+  const room = new URLSearchParams(location.search).get('room');
+  if (room) { $('code').value = room.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4); $('friends').classList.remove('hide'); showMsg(T('joinRoomHint')); }
+  const d = Pro.daily(); if (d) setTimeout(() => { toast(`🎁 ${T('daily')}: +${d} 🪙`); GA.play('coin'); refreshProfileUI(); }, 600);
+}
+
+/* ---------- установка и автообновление (PWA) ---------- */
+let deferredInstall = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; $('bInstall').classList.remove('hide'); });
+$('bInstall').addEventListener('click', () => { if (!deferredInstall) return; deferredInstall.prompt(); deferredInstall.userChoice.finally(() => { deferredInstall = null; $('bInstall').classList.add('hide'); }); });
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && window.top === window) {
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return; // первая установка — перезагрузка не нужна
+    reloading = true;
+    if (mode === 'menu') location.reload(); else pendingReload = true; // во время матча — перезагрузим при выходе в меню
+  });
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').then((reg) => {
+    reg.update().catch(() => {});
+    setInterval(() => reg.update().catch(() => {}), 10 * 60 * 1000);
+  }).catch(() => {}));
+}
+
+/* ================= старт ================= */
+Promise.race([initYandex(), new Promise((r) => setTimeout(r, 4000))]).then(() => {
+  initMenu();
   requestAnimationFrame(frame);
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { /* офлайн-кэш необязателен */ });
-  window.__dino = { buildEnemy, animateEnemy, get S() { return S; }, get clock() { return clock; }, ctl, THREE, foodMesh, scene, renderer, Profile, input, camera, menu3d, menuSetDino };      // для отладки и автотестов
+  yReady();
+});
+window.__ps = { get P() { return P; }, iv: getInputVec, get V() { return V; }, get mode() { return mode; }, get net() { return net; }, get game() { return game; }, startOffline, connect, T, get cfg() { return cfg; } };
 })();

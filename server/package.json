@@ -1,14 +1,16 @@
 {
-  "name": "dino-evolution",
+  "name": "penguin-sumo-server",
   "version": "1.0.0",
-  "description": "Dino Evolution — 3D мультиплеерная игра про эволюцию динозавров (Three.js + Node.js)",
+  "description": "Multiplayer server for Penguin Sumo",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "test": "node ../tools/roomtest.js",
-    "build": "node ../tools/build.js"
+    "start": "node server.js"
   },
-  "engines": { "node": ">=18" },
-  "optionalDependencies": { "pg": "^8.11.0" },
-  "license": "MIT"
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "pg": "^8.12.0"
+  }
 }
